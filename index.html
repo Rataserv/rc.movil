@@ -50,6 +50,8 @@
             const [errorHaberes, setErrorHaberes] = useState('');
             const [montoMaximo, setMontoMaximo] = useState(30000000);
             const [montoMaximoHaberes, setMontoMaximoHaberes] = useState(30000000);
+            const [montoMaximoSMSV, setMontoMaximoSMSV] = useState(null);
+            const [cargandoMontoMaximo, setCargandoMontoMaximo] = useState(false);
             const [mostrarTabla, setMostrarTabla] = useState(false);
             const [modificarTasa, setModificarTasa] = useState(false);
             const [tasaPersonalizada, setTasaPersonalizada] = useState('56.00');
@@ -219,10 +221,64 @@
                 }
             };
 
-            // Buscar cuota social y TNA al cargar la app
+            // Función para obtener el monto máximo de ayuda económica desde la página de SMSV
+            const obtenerMontoMaximoSMSV = async () => {
+                setCargandoMontoMaximo(true);
+                try {
+                    const response = await fetch('https://www.smsv.com.ar/ayudas-economicas/personales-en-pesos');
+                    const html = await response.text();
+                    
+                    // Buscar el monto máximo en el HTML
+                    // Patrones para buscar "monto máximo", "hasta", etc.
+                    const patterns = [
+                        /monto\s+m[áa]ximo[:\s]+\$?\s*([\d.,]+)/gi,
+                        /hasta\s+\$?\s*([\d.,]+)/gi,
+                        /m[áa]ximo[:\s]+\$?\s*([\d.,]+)/gi,
+                        /\$\s*([\d.,]+)\s+m[áa]ximo/gi,
+                        /tope[:\s]+\$?\s*([\d.,]+)/gi,
+                    ];
+                    
+                    let montoEncontrado = null;
+                    
+                    for (const pattern of patterns) {
+                        const matches = html.match(pattern);
+                        if (matches && matches.length > 0) {
+                            // Extraer solo los números
+                            const numberMatch = matches[0].match(/([\d.,]+)/);
+                            if (numberMatch) {
+                                const montoStr = numberMatch[0].replace(/\./g, '').replace(',', '.');
+                                const montoNum = parseFloat(montoStr);
+                                // Validar que sea un monto razonable (entre 1 millón y 100 millones)
+                                if (!isNaN(montoNum) && montoNum > 1000000 && montoNum < 100000000) {
+                                    montoEncontrado = montoNum;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (montoEncontrado) {
+                        setMontoMaximoSMSV(montoEncontrado);
+                        console.log('Monto máximo SMSV actualizado:', montoEncontrado);
+                    } else {
+                        // Si no se encuentra, usar el valor por defecto
+                        setMontoMaximoSMSV(30000000);
+                        console.log('No se encontró monto máximo, usando valor por defecto');
+                    }
+                } catch (error) {
+                    console.error('Error al obtener monto máximo de SMSV:', error);
+                    // En caso de error, usar el valor por defecto
+                    setMontoMaximoSMSV(30000000);
+                } finally {
+                    setCargandoMontoMaximo(false);
+                }
+            };
+
+            // Buscar cuota social, TNA y monto máximo al cargar la app
             useEffect(() => {
                 buscarCuotaSocialVigente();
                 buscarTNAVigente();
+                obtenerMontoMaximoSMSV();
             }, []);
 
             // Migrar datos antiguos al nuevo formato con categorías y títulos
@@ -645,6 +701,25 @@
                     return;
                 }
 
+                // Validación del Monto Máximo que otorga SMSV
+                // Sumar todos los saldos de ayuda económica vigente NO cancelados
+                const totalSaldosVigentesNoCancelados = cuotasAyudaEconomica.reduce((total, cuota) => {
+                    if (!cuota.seCancela && cuota.saldoAyuda) {
+                        const saldo = parseNumeroDecimal(cuota.saldoAyuda);
+                        return total + saldo;
+                    }
+                    return total;
+                }, 0);
+                
+                // Suma de saldos vigentes no cancelados + monto solicitado
+                const sumaTotal = totalSaldosVigentesNoCancelados + montoAyudaNumerico;
+                const montoMaximoSMSVActual = montoMaximoSMSV || MONTO_MAXIMO_ABSOLUTO;
+                
+                if (sumaTotal > montoMaximoSMSVActual) {
+                    setErrorRetirado(`La suma de los saldos de ayuda económica vigente no cancelados ($${totalSaldosVigentesNoCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) más el monto solicitado ($${montoAyudaNumerico.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) supera el Monto Máximo que otorga SMSV ($${montoMaximoSMSVActual.toLocaleString('es-AR')}). Total: $${sumaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}.`);
+                    return;
+                }
+
                 // Cálculo de la cuota usando sistema francés
                 const tasaMensual = (TNA / 100) / 12;
                 const numeroCuotas = parseInt(cuotas);
@@ -927,6 +1002,25 @@
                     return;
                 }
                 
+                // Validación del Monto Máximo que otorga SMSV
+                // Sumar todos los saldos de ayuda económica vigente NO cancelados
+                const totalSaldosVigentesNoCancelados = cuotasAyudaEconomicaCaja.reduce((total, cuota) => {
+                    if (!cuota.seCancela && cuota.saldoAyuda) {
+                        const saldo = parseNumeroDecimal(cuota.saldoAyuda);
+                        return total + saldo;
+                    }
+                    return total;
+                }, 0);
+                
+                // Suma de saldos vigentes no cancelados + monto solicitado
+                const sumaTotal = totalSaldosVigentesNoCancelados + montoAyudaNumerico;
+                const montoMaximoSMSVActual = montoMaximoSMSV || MONTO_MAXIMO_ABSOLUTO;
+                
+                if (sumaTotal > montoMaximoSMSVActual) {
+                    setErrorCaja(`La suma de los saldos de ayuda económica vigente no cancelados ($${totalSaldosVigentesNoCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) más el monto solicitado ($${montoAyudaNumerico.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) supera el Monto Máximo que otorga SMSV ($${montoMaximoSMSVActual.toLocaleString('es-AR')}). Total: $${sumaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}.`);
+                    return;
+                }
+                
                 // Calcular la suma de saldos de ayudas económicas que se cancelan (marcadas con C)
                 const saldosCancelados = cuotasAyudaEconomicaCaja.reduce((total, cuota) => {
                     if (cuota.seCancela && cuota.saldoAyuda) {
@@ -1085,6 +1179,30 @@
                         setErrorHaberes('Por favor, ingrese el Monto de Afectación del Certificado 14-12');
                     } else {
                         setError('Por favor, ingrese el Monto de Afectación del Certificado 14-12');
+                    }
+                    return;
+                }
+
+                // Validación del Monto Máximo que otorga SMSV
+                // Sumar todos los saldos de ayuda económica vigente NO cancelados
+                const totalSaldosVigentesNoCancelados = cuotasAyudaEconomicaHaberes.reduce((total, cuota) => {
+                    if (!cuota.seCancela && cuota.saldoAyuda) {
+                        const saldo = parseFloat(cuota.saldoAyuda.replace(/\./g, '').replace(',', '.')) || 0;
+                        return total + saldo;
+                    }
+                    return total;
+                }, 0);
+                
+                // Suma de saldos vigentes no cancelados + monto solicitado
+                const sumaTotal = totalSaldosVigentesNoCancelados + montoNumerico;
+                const montoMaximoSMSVActual = montoMaximoSMSV || MONTO_MAXIMO_ABSOLUTO;
+                
+                if (sumaTotal > montoMaximoSMSVActual) {
+                    const mensajeError = `La suma de los saldos de ayuda económica vigente no cancelados ($${totalSaldosVigentesNoCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) más el monto solicitado ($${montoNumerico.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) supera el Monto Máximo que otorga SMSV ($${montoMaximoSMSVActual.toLocaleString('es-AR')}). Total: $${sumaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}.`;
+                    if (canalPagoCajaPolicial === 'haberes') {
+                        setErrorHaberes(mensajeError);
+                    } else {
+                        setError(mensajeError);
                     }
                     return;
                 }
@@ -1484,7 +1602,7 @@ Al importe de la cuota pueden sumarse cargos por cuota social y por contratació
                             RC Móvil
                         </h1>
                         <p className="text-xs text-gray-600 text-center mb-3">
-                            BETA
+                            Closed BETA
                         </p>
 
                         {/* Título */}
@@ -1686,7 +1804,7 @@ Prestación de Servicio.`;
                         )}
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-blue-600">En Chrome, guarda esta app en favoritos para un acceso rápido.</p><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                     </div>
                 );
             }
@@ -1862,7 +1980,12 @@ Prestación de Servicio.`;
                                     </label>
                                     <div className="flex gap-2">
                                         <button
-                                            onClick={() => setEsSocioNuevoRetirado(true)}
+                                            onClick={() => {
+                                                setEsSocioNuevoRetirado(true);
+                                                if (!cuotaSocialEditadaManualmente) {
+                                                    buscarCuotaSocialVigente();
+                                                }
+                                            }}
                                             className={`py-1 px-4 rounded-lg font-semibold text-sm transition-all ${
                                                 esSocioNuevoRetirado
                                                     ? 'bg-blue-600 text-white shadow-lg'
@@ -2320,7 +2443,7 @@ Prestación de Servicio.`;
                         )}
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                     </div>
                 );
             }
@@ -2388,7 +2511,7 @@ Prestación de Servicio.`;
                         </div>
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                     </div>
                 );
             }
@@ -2451,7 +2574,7 @@ Prestación de Servicio.`;
                         </div>
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                     </div>
                 );
             }
@@ -2745,7 +2868,7 @@ Prestación de Servicio.`;
                         </div>
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                     </div>
                 );
             }
@@ -2884,7 +3007,7 @@ Prestación de Servicio.`;
                             </div>
 
                             {/* Footer */}
-                            <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                            <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                         </div>
                     );
                 }
@@ -3076,7 +3199,12 @@ Prestación de Servicio.`;
                                             </label>
                                             <div className="flex gap-2">
                                                 <button
-                                                    onClick={() => setEsSocioNuevoCaja(true)}
+                                                    onClick={() => {
+                                                        setEsSocioNuevoCaja(true);
+                                                        if (!cuotaSocialEditadaManualmente) {
+                                                            buscarCuotaSocialVigente();
+                                                        }
+                                                    }}
                                                     className={`py-2 px-6 rounded-lg font-semibold text-sm transition-all ${
                                                         esSocioNuevoCaja
                                                             ? 'bg-orange-600 text-white shadow-lg'
@@ -3117,6 +3245,11 @@ Prestación de Servicio.`;
                                                 {modificarCuotaSocial ? '✓ Aplicar' : '✏️ Modificar'}
                                             </button>
                                         </div>
+                                        {!modificarCuotaSocial && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {buscandoCuotaSocial ? '🔄 Actualizando cuota vigente...' : '✓ Cuota actualizada automáticamente desde www.smsv.com.ar'}
+                                            </p>
+                                        )}
                                         {modificarCuotaSocial && (
                                             <div className="mt-3">
                                                 <input
@@ -3134,6 +3267,9 @@ Prestación de Servicio.`;
                                                 <p className="text-xs text-gray-500 mt-1">
                                                     Ingrese el monto sin puntos ni comas
                                                 </p>
+                                                {buscandoCuotaSocial && (
+                                                    <p className="text-xs text-blue-600 mt-1">🔄 Buscando cuota vigente...</p>
+                                                )}
                                             </div>
                                         )}
                                         <p className="text-xs text-gray-500 mt-2">
@@ -3539,7 +3675,7 @@ Prestación de Servicio.`;
                             )}
 
                             {/* Footer */}
-                            <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                            <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                         </div>
                     );
                 }
@@ -4020,7 +4156,11 @@ Prestación de Servicio.`;
                                     </span>
                                 ) : (
                                     <span>
-                                        Monto máximo absoluto: ${MONTO_MAXIMO_ABSOLUTO.toLocaleString('es-AR')}
+                                        {cargandoMontoMaximo ? (
+                                            <>🔄 Obteniendo monto máximo...</>
+                                        ) : (
+                                            <>Monto Máximo que otorga SMSV: ${(montoMaximoSMSV || MONTO_MAXIMO_ABSOLUTO).toLocaleString('es-AR')}</>
+                                        )}
                                     </span>
                                 )}
                             </p>
@@ -4238,7 +4378,7 @@ Prestación de Servicio.`;
                     })()}
 
                     {/* Footer */}
-                    <div className="text-center mt-8"><p className="text-xs text-red-600 mb-1">Versión de testeo. Por favor, reporte cualquier error que encuentre a libertad@smsv.com.ar</p><p className="text-xs text-gray-400">by afr1249</p></div>
+                    <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
                 </div>
             );
         }
