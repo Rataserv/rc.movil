@@ -11,26 +11,85 @@
     <meta name="apple-mobile-web-app-title" content="SMSV Calc">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#155E75">
-    <meta name="description" content="Calculadora de Ayudas Económicas - Sociedad Mutual de Servicios Varios">
+    <meta name="description" content="Calculadora de Ayudas Económicas - Sociedad Militar Seguro de Vida">
     
     <!-- Apple Touch Icons -->
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%23155E75'/><text x='90' y='100' font-size='60' text-anchor='middle' fill='white' font-family='Arial, sans-serif' font-weight='bold'>SMSV</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%23155E75'/><text x='90' y='100' font-size='60' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='700'>SMSV</text></svg>">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23155E75'/><text x='50' y='65' font-size='40' text-anchor='middle' fill='white' font-family='Arial, sans-serif' font-weight='bold'>SM</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23155E75'/><text x='50' y='65' font-size='40' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='700'>SM</text></svg>">
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script defer crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script defer crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: [
+                            '-apple-system',
+                            'BlinkMacSystemFont',
+                            'San Francisco',
+                            'Segoe UI',
+                            'Roboto',
+                            'Helvetica Neue',
+                            'Arial',
+                            'sans-serif'
+                        ]
+                    }
+                }
+            }
+        }
+    </script>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-orange-50 min-h-screen">
+    <!-- Pantalla de carga inicial -->
+    <div id="loading-screen" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        background: linear-gradient(135deg, #EFF6FF 0%, #FFF7ED 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    ">
+        <img 
+            src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
+            alt="SMSV Logo" 
+            style="width: 120px; height: auto; margin-bottom: 30px; animation: pulse 2s ease-in-out infinite;"
+        />
+        <div style="
+            width: 50px;
+            height: 50px;
+            border: 4px solid #E5E7EB;
+            border-top-color: #155E75;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        "></div>
+        <p style="
+            margin-top: 20px;
+            color: #155E75;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        ">Cargando...</p>
+    </div>
+
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+        
+        // *** CONFIGURACIÓN: FECHA DE CORTE ***
+        // Modificar esta fecha cuando cambie el mes
+        const FECHA_CORTE = "20 de abril de 2026";
+        // *** FIN CONFIGURACIÓN ***
 
         function App() {
             // Estado para controlar la pantalla actual
@@ -44,6 +103,7 @@
             const [montoAfectacion, setMontoAfectacion] = useState('');
             const [montoAfectacionHaberes, setMontoAfectacionHaberes] = useState('');
             const [haberNetoHaberes, setHaberNetoHaberes] = useState('');
+            const [haberNetoActividad, setHaberNetoActividad] = useState('');
             const [resultado, setResultado] = useState(null);
             const [resultadoHaberes, setResultadoHaberes] = useState(null);
             const [error, setError] = useState('');
@@ -54,14 +114,16 @@
             const [cargandoMontoMaximo, setCargandoMontoMaximo] = useState(false);
             const [mostrarTabla, setMostrarTabla] = useState(false);
             const [modificarTasa, setModificarTasa] = useState(false);
-            const [tasaPersonalizada, setTasaPersonalizada] = useState('56.00');
+            const [tasaPersonalizada, setTasaPersonalizada] = useState('48.00');
             const [esSocioNuevo, setEsSocioNuevo] = useState(false);
             const [esSocioNuevoHaberes, setEsSocioNuevoHaberes] = useState(false);
             const [esPoderdanteHaberes, setEsPoderdanteHaberes] = useState(false);
             const [modificarCuotaSocial, setModificarCuotaSocial] = useState(false);
-            const [cuotaSocialPersonalizada, setCuotaSocialPersonalizada] = useState('20070');
+            const [cuotaSocialPersonalizada, setCuotaSocialPersonalizada] = useState('20470');
             const [cuotaSocialEditadaManualmente, setCuotaSocialEditadaManualmente] = useState(false);
             const [buscandoCuotaSocial, setBuscandoCuotaSocial] = useState(false);
+            const [mesesDiferimientoActividad, setMesesDiferimientoActividad] = useState(0); // 0 o 3
+            const [mesesDiferimientoHaberes, setMesesDiferimientoHaberes] = useState(0); // 0 o 3
             
             // Estados para consulta BCRA
             const [mostrarConsultaBCRA, setMostrarConsultaBCRA] = useState(false);
@@ -77,6 +139,7 @@
             const [resultadoRetirado, setResultadoRetirado] = useState(null);
             const [errorRetirado, setErrorRetirado] = useState('');
             const [esSocioNuevoRetirado, setEsSocioNuevoRetirado] = useState(false);
+            const [mesesDiferimientoRetirado, setMesesDiferimientoRetirado] = useState(0); // 0 o 3
             
             // Estados para pantalla Caja Policial (misma funcionalidad que retirado)
             const [haberNetoCaja, setHaberNetoCaja] = useState('');
@@ -85,30 +148,55 @@
             const [resultadoCaja, setResultadoCaja] = useState(null);
             const [errorCaja, setErrorCaja] = useState('');
             const [esSocioNuevoCaja, setEsSocioNuevoCaja] = useState(false);
+            const [mesesDiferimientoCaja, setMesesDiferimientoCaja] = useState(0); // 0 o 3
             
             // Estados para cuotas de ayuda económica
             const [cuotasAyudaEconomica, setCuotasAyudaEconomica] = useState([
-                { id: 1, monto: '', saldoAyuda: '', seCancela: false },
-                { id: 2, monto: '', saldoAyuda: '', seCancela: false },
-                { id: 3, monto: '', saldoAyuda: '', seCancela: false }
+                { id: 1, monto: '', saldoAyuda: '', seCancela: false, tasaCancelacion: '' },
+                { id: 2, monto: '', saldoAyuda: '', seCancela: false, tasaCancelacion: '' },
+                { id: 3, monto: '', saldoAyuda: '', seCancela: false, tasaCancelacion: '' }
             ]);
             
             // Estados para cuotas de ayuda económica de Caja Policial
             const [cuotasAyudaEconomicaCaja, setCuotasAyudaEconomicaCaja] = useState([
-                { id: 1, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' },
-                { id: 2, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' },
-                { id: 3, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' }
+                { id: 1, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' },
+                { id: 2, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' },
+                { id: 3, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' }
             ]);
             
-            // Estados para cuotas de ayuda económica en pantalla Haberes (Caja Policial - Haberes / En Actividad)
+            // Estados para cuotas de ayuda económica en pantalla En Actividad
+            const [cuotasAyudaEconomicaEnActividad, setCuotasAyudaEconomicaEnActividad] = useState([
+                { id: 1, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' },
+                { id: 2, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' },
+                { id: 3, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' }
+            ]);
+            
+            // Estados para cuotas de ayuda económica en pantalla Haberes (Caja Policial - Haberes)
             const [cuotasAyudaEconomicaHaberes, setCuotasAyudaEconomicaHaberes] = useState([
-                { id: 1, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' },
-                { id: 2, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' },
-                { id: 3, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' }
+                { id: 1, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' },
+                { id: 2, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' },
+                { id: 3, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' }
             ]);
             
             // Estado para canal de pago de Caja Policial
             const [canalPagoCajaPolicial, setCanalPagoCajaPolicial] = useState(''); // '', 'haberes', 'caja'
+
+            // Estados para fecha de pago/otorgamiento
+            const obtenerFechaManana = () => {
+                const manana = new Date();
+                manana.setDate(manana.getDate() + 1);
+                return manana.toISOString().split('T')[0];
+            };
+            const [fechaPagoRetirado, setFechaPagoRetirado] = useState(obtenerFechaManana());
+            const [fechaPagoCaja, setFechaPagoCaja] = useState(obtenerFechaManana());
+            const [fechaPagoActividad, setFechaPagoActividad] = useState(obtenerFechaManana());
+            const [fechaPagoHaberes, setFechaPagoHaberes] = useState(obtenerFechaManana());
+
+            // Estados para Salario Mínimo Vital y Móvil
+            const [salarioMinimo, setSalarioMinimo] = useState(null);
+            const [modificarSalarioMinimo, setModificarSalarioMinimo] = useState(false);
+            const [salarioMinimoPersonalizado, setSalarioMinimoPersonalizado] = useState('');
+            const [salarioMinimoEditadoManualmente, setSalarioMinimoEditadoManualmente] = useState(false);
 
             // Estados para mensajes predeterminados
             const [mensajesPredeterminados, setMensajesPredeterminados] = useState(() => {
@@ -126,160 +214,61 @@
             const [editandoIndice, setEditandoIndice] = useState(null);
             const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
 
-            const TNA_DEFAULT = 56.00; // Tasa Nominal Anual - Vigente desde 23/02/2026
-            const CUOTA_SOCIAL_DEFAULT = 20070; // Cuota Social vigente desde 01/12/2025
+            // ============================================================
+            // CONFIGURACIÓN DE PARÁMETROS - ACTUALIZAR AQUÍ MANUALMENTE
+            // ============================================================
+            
+            // TNA - Tasa Nominal Anual (%)
+            const TNA_DEFAULT = 48.00;
+            
+            // TOPE - Monto Máximo de Ayuda Económica ($)
+            const MONTO_MAXIMO_ABSOLUTO = 30000000;
+            
+            // CUOTA SOCIAL - Valor vigente ($)
+            const CUOTA_SOCIAL_DEFAULT = 20470;
+            
+            // SALARIO MÍNIMO VITAL Y MÓVIL - Valor vigente ($)
+            const SALARIO_MINIMO_DEFAULT = 352400;
+            
+            // ============================================================
+            // FIN CONFIGURACIÓN
+            // ============================================================
+            
             const CUOTA_SOCIAL = cuotaSocialEditadaManualmente 
                 ? parseFloat(cuotaSocialPersonalizada) 
                 : (modificarCuotaSocial ? parseFloat(cuotaSocialPersonalizada) : CUOTA_SOCIAL_DEFAULT);
-            const MONTO_MAXIMO_ABSOLUTO = 30000000;
             const PLANES_CUOTAS = [24, 30, 36, 48, 60, 72];
             
             // Usar la tasa personalizada si está habilitada, sino usar la default
             const TNA = modificarTasa ? parseFloat(tasaPersonalizada) : TNA_DEFAULT;
+            
+            // Usar el salario mínimo personalizado si fue editado manualmente, sino usar el default
+            const SALARIO_MINIMO = salarioMinimoEditadoManualmente 
+                ? parseFloat(salarioMinimoPersonalizado) 
+                : (modificarSalarioMinimo ? parseFloat(salarioMinimoPersonalizado) : SALARIO_MINIMO_DEFAULT);
 
-            // Función para buscar la cuota social vigente en www.smsv.com.ar
-            const buscarCuotaSocialVigente = async () => {
-                setBuscandoCuotaSocial(true);
-                try {
-                    const response = await fetch('https://www.smsv.com.ar');
-                    const html = await response.text();
-                    
-                    // Buscar el valor de la cuota social en el HTML
-                    // Patrón común: buscar "cuota social" seguido de un número
-                    const patterns = [
-                        /cuota\s+social[:\s]+\$?\s*([\d.,]+)/gi,
-                        /valor\s+cuota[:\s]+\$?\s*([\d.,]+)/gi,
-                        /\$\s*([\d.,]+)\s*cuota\s+social/gi,
-                    ];
-                    
-                    let cuotaEncontrada = null;
-                    
-                    for (const pattern of patterns) {
-                        const matches = html.match(pattern);
-                        if (matches && matches.length > 0) {
-                            // Extraer solo los números
-                            const numberMatch = matches[0].match(/([\d.,]+)/);
-                            if (numberMatch) {
-                                cuotaEncontrada = numberMatch[0].replace(/\./g, '').replace(',', '.');
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (cuotaEncontrada) {
-                        const cuotaNumero = parseFloat(cuotaEncontrada);
-                        if (!isNaN(cuotaNumero) && cuotaNumero > 0) {
-                            setCuotaSocialPersonalizada(Math.round(cuotaNumero).toString());
-                            setCuotaSocialEditadaManualmente(false);
-                            console.log('Cuota social actualizada:', Math.round(cuotaNumero));
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error al buscar cuota social:', error);
-                } finally {
-                    setBuscandoCuotaSocial(false);
-                }
-            };
-
-            // Función para buscar la TNA vigente en www.smsv.com.ar/ayudas-economicas/personales-en-pesos
-            const buscarTNAVigente = async () => {
-                try {
-                    const response = await fetch('https://www.smsv.com.ar/ayudas-economicas/personales-en-pesos');
-                    const html = await response.text();
-                    
-                    // Buscar el valor de la TNA en el HTML
-                    // Patrones para buscar TNA
-                    const patterns = [
-                        /TNA[:\s]+(\d+(?:[.,]\d+)?)\s*%/gi,
-                        /tasa\s+nominal\s+anual[:\s]+(\d+(?:[.,]\d+)?)\s*%/gi,
-                        /(\d+(?:[.,]\d+)?)\s*%\s+TNA/gi,
-                    ];
-                    
-                    let tnaEncontrada = null;
-                    
-                    for (const pattern of patterns) {
-                        const matches = html.match(pattern);
-                        if (matches && matches.length > 0) {
-                            // Extraer solo los números
-                            const numberMatch = matches[0].match(/(\d+(?:[.,]\d+)?)/);
-                            if (numberMatch) {
-                                tnaEncontrada = numberMatch[0].replace(',', '.');
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (tnaEncontrada) {
-                        const tnaNumero = parseFloat(tnaEncontrada);
-                        if (!isNaN(tnaNumero) && tnaNumero > 0 && tnaNumero < 200) { // Validación razonable
-                            setTasaPersonalizada(tnaNumero.toFixed(2));
-                            console.log('TNA actualizada:', tnaNumero.toFixed(2));
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error al buscar TNA:', error);
-                }
-            };
-
-            // Función para obtener el monto máximo de ayuda económica desde la página de SMSV
-            const obtenerMontoMaximoSMSV = async () => {
-                setCargandoMontoMaximo(true);
-                try {
-                    const response = await fetch('https://www.smsv.com.ar/ayudas-economicas/personales-en-pesos');
-                    const html = await response.text();
-                    
-                    // Buscar el monto máximo en el HTML
-                    // Patrones para buscar "monto máximo", "hasta", etc.
-                    const patterns = [
-                        /monto\s+m[áa]ximo[:\s]+\$?\s*([\d.,]+)/gi,
-                        /hasta\s+\$?\s*([\d.,]+)/gi,
-                        /m[áa]ximo[:\s]+\$?\s*([\d.,]+)/gi,
-                        /\$\s*([\d.,]+)\s+m[áa]ximo/gi,
-                        /tope[:\s]+\$?\s*([\d.,]+)/gi,
-                    ];
-                    
-                    let montoEncontrado = null;
-                    
-                    for (const pattern of patterns) {
-                        const matches = html.match(pattern);
-                        if (matches && matches.length > 0) {
-                            // Extraer solo los números
-                            const numberMatch = matches[0].match(/([\d.,]+)/);
-                            if (numberMatch) {
-                                const montoStr = numberMatch[0].replace(/\./g, '').replace(',', '.');
-                                const montoNum = parseFloat(montoStr);
-                                // Validar que sea un monto razonable (entre 1 millón y 100 millones)
-                                if (!isNaN(montoNum) && montoNum > 1000000 && montoNum < 100000000) {
-                                    montoEncontrado = montoNum;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (montoEncontrado) {
-                        setMontoMaximoSMSV(montoEncontrado);
-                        console.log('Monto máximo SMSV actualizado:', montoEncontrado);
-                    } else {
-                        // Si no se encuentra, usar el valor por defecto
-                        setMontoMaximoSMSV(30000000);
-                        console.log('No se encontró monto máximo, usando valor por defecto');
-                    }
-                } catch (error) {
-                    console.error('Error al obtener monto máximo de SMSV:', error);
-                    // En caso de error, usar el valor por defecto
-                    setMontoMaximoSMSV(30000000);
-                } finally {
-                    setCargandoMontoMaximo(false);
-                }
-            };
-
-            // Buscar cuota social, TNA y monto máximo al cargar la app
+            // useEffect para inicializar el salario mínimo al cargar la app
             useEffect(() => {
-                buscarCuotaSocialVigente();
-                buscarTNAVigente();
-                obtenerMontoMaximoSMSV();
+                // Cargar el salario mínimo guardado si fue editado manualmente
+                const salarioGuardado = localStorage.getItem('salarioMinimoPersonalizado');
+                const editadoManualmente = localStorage.getItem('salarioMinimoEditadoManualmente') === 'true';
+                
+                if (editadoManualmente && salarioGuardado) {
+                    setSalarioMinimoPersonalizado(salarioGuardado);
+                    setSalarioMinimoEditadoManualmente(true);
+                    setSalarioMinimo(parseFloat(salarioGuardado));
+                } else {
+                    setSalarioMinimo(SALARIO_MINIMO_DEFAULT);
+                }
             }, []);
+
+            // Buscar cuota social y monto máximo al cargar la app - DESHABILITADO
+            // La actualización de parámetros ahora es manual modificando el HTML
+            // useEffect(() => {
+            //     buscarCuotaSocialVigente();
+            //     buscarTNAVigente();
+            //     obtenerMontoMaximoSMSV();
+            // }, []);
 
             // Migrar datos antiguos al nuevo formato con categorías y títulos
             useEffect(() => {
@@ -532,18 +521,18 @@
                 // Eliminar todo excepto números, punto y coma
                 let limpio = valor.replace(/[^\d.,]/g, '');
                 
-                // Reemplazar coma por punto para procesamiento interno
-                limpio = limpio.replace(',', '.');
+                // Reemplazar punto por coma (para usar coma como separador decimal)
+                limpio = limpio.replace(/\./g, ',');
                 
-                // Permitir solo un punto decimal
-                const partes = limpio.split('.');
+                // Permitir solo una coma decimal
+                const partes = limpio.split(',');
                 if (partes.length > 2) {
-                    limpio = partes[0] + '.' + partes.slice(1).join('');
+                    limpio = partes[0] + ',' + partes.slice(1).join('');
                 }
                 
                 // Limitar a 2 decimales
                 if (partes.length === 2 && partes[1].length > 2) {
-                    limpio = partes[0] + '.' + partes[1].substring(0, 2);
+                    limpio = partes[0] + ',' + partes[1].substring(0, 2);
                 }
                 
                 return limpio;
@@ -551,7 +540,7 @@
             
             const parseNumeroDecimal = (valor) => {
                 if (!valor) return 0;
-                // Convertir coma a punto y parsear
+                // Reemplazar coma por punto para parsear correctamente como número
                 return parseFloat(valor.replace(',', '.')) || 0;
             };
             
@@ -601,7 +590,7 @@
                 const nuevoId = cuotasAyudaEconomica.length > 0 
                     ? Math.max(...cuotasAyudaEconomica.map(c => c.id)) + 1 
                     : 1;
-                setCuotasAyudaEconomica([...cuotasAyudaEconomica, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false }]);
+                setCuotasAyudaEconomica([...cuotasAyudaEconomica, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false, tasaCancelacion: '' }]);
             };
             
             const actualizarCuotaAyuda = (id, valor) => {
@@ -618,7 +607,15 @@
             
             const toggleCancelacionCuota = (id) => {
                 setCuotasAyudaEconomica(cuotasAyudaEconomica.map(cuota => 
-                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela } : cuota
+                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela, tasaCancelacion: !cuota.seCancela ? cuota.tasaCancelacion : '' } : cuota
+                ));
+            };
+            
+            const actualizarTasaCancelacion = (id, valor) => {
+                // Permitir solo números enteros
+                const valorLimpio = valor.replace(/[^\d]/g, '');
+                setCuotasAyudaEconomica(cuotasAyudaEconomica.map(cuota => 
+                    cuota.id === id ? { ...cuota, tasaCancelacion: valorLimpio } : cuota
                 ));
             };
             
@@ -633,6 +630,66 @@
                     const monto = parseNumeroDecimal(cuota.monto);
                     return total + monto;
                 }, 0);
+            };
+
+            /**
+             * Función para calcular los intereses diferidos (intereses anticipados)
+             * desde el momento del otorgamiento hasta el inicio de la amortización.
+             * 
+             * @param {number} montoSolicitado - Capital del préstamo
+             * @param {number} tna - Tasa Nominal Anual (en porcentaje, ej: 56.00)
+             * @param {number} mesesDiferimiento - 0 para plan normal, 3 para plan diferido
+             * @param {Date} fechaOtorgamiento - Fecha de otorgamiento del crédito (default: hoy)
+             * @returns {Object} { interesesMonto, diasCalculados, fechaPrimerVencimiento }
+             */
+            const calcularInteresesDiferidos = (montoSolicitado, tna, mesesDiferimiento = 0, fechaOtorgamiento = new Date()) => {
+                // La Fecha de Corte es el día 20 de cada mes
+                const DIA_CORTE = 20;
+                
+                // Obtener el día del mes de la fecha de otorgamiento
+                const diaOtorgamiento = fechaOtorgamiento.getDate();
+                const mesOtorgamiento = fechaOtorgamiento.getMonth(); // 0-11
+                const anioOtorgamiento = fechaOtorgamiento.getFullYear();
+                
+                // Calcular la fecha de corte del mes actual
+                const fechaCorteMesActual = new Date(anioOtorgamiento, mesOtorgamiento, DIA_CORTE);
+                
+                // Determinar la fecha del primer cargo según la lógica:
+                // - Si se otorga ANTES o EN el día 20 → primer cargo es el mes siguiente (día 1)
+                // - Si se otorga DESPUÉS del día 20 → primer cargo es dentro de 2 meses (día 1)
+                let fechaPrimerCargo;
+                
+                if (diaOtorgamiento <= DIA_CORTE) {
+                    // Primer cargo es el día 1 del mes siguiente
+                    fechaPrimerCargo = new Date(anioOtorgamiento, mesOtorgamiento + 1, 1);
+                } else {
+                    // Primer cargo es el día 1 de dentro de 2 meses
+                    fechaPrimerCargo = new Date(anioOtorgamiento, mesOtorgamiento + 2, 1);
+                }
+                
+                // Si hay diferimiento de 3 meses, sumar 3 meses adicionales
+                if (mesesDiferimiento === 3) {
+                    fechaPrimerCargo = new Date(
+                        fechaPrimerCargo.getFullYear(),
+                        fechaPrimerCargo.getMonth() + 3,
+                        1
+                    );
+                }
+                
+                // Calcular la cantidad de días exactos entre el otorgamiento y el primer cargo
+                const milisegundosPorDia = 1000 * 60 * 60 * 24;
+                const diferenciaMilisegundos = fechaPrimerCargo.getTime() - fechaOtorgamiento.getTime();
+                const diasCalculados = Math.floor(diferenciaMilisegundos / milisegundosPorDia);
+                
+                // Fórmula de interés simple: I = (Capital * TNA * días) / (365 * 100)
+                // TNA está en porcentaje (ej: 56.00), por eso dividimos por 100
+                const interesesMonto = (montoSolicitado * tna * diasCalculados) / (365 * 100);
+                
+                return {
+                    interesesMonto: interesesMonto,
+                    diasCalculados: diasCalculados,
+                    fechaPrimerVencimiento: fechaPrimerCargo
+                };
             };
 
             // Función para calcular el monto máximo disponible según el plan de cuotas
@@ -734,8 +791,38 @@
                     return;
                 }
                 
+                // Validación del Salario Mínimo Vital y Móvil
+                // Haber Neto + Cuotas de ayudas canceladas - Cuota de la nueva ayuda >= Salario Mínimo
+                const haberNetoNumerico = parseFloat(haberNeto.replace(/,/g, '.'));
+                const totalCuotasCanceladas = cuotasAyudaEconomica.reduce((total, cuota) => {
+                    if (cuota.seCancela && cuota.monto) {
+                        const monto = parseNumeroDecimal(cuota.monto);
+                        return total + monto;
+                    }
+                    return total;
+                }, 0);
+                
+                const haberDisponible = haberNetoNumerico + totalCuotasCanceladas - cuotaMensual;
+                const salarioMinimoActual = salarioMinimo || SALARIO_MINIMO_DEFAULT;
+                
+                if (haberDisponible < salarioMinimoActual) {
+                    setErrorRetirado(`El haber disponible después del descuento de la cuota ($${haberDisponible.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) es menor al Salario Mínimo Vital y Móvil ($${salarioMinimoActual.toLocaleString('es-AR')}). Por favor, reduzca el monto solicitado o aumente el número de cuotas.`);
+                    return;
+                }
+                
                 const totalAPagar = cuotaMensual * numeroCuotas;
                 const interesTotal = totalAPagar - montoSolicitadoReal;
+
+                // CORRECCIÓN: Calcular intereses diferidos sobre el MONTO SOLICITADO ORIGINAL
+                // Los intereses por diferimiento se calculan sobre el monto que el socio pidió,
+                // NO sobre el monto después de restar las cancelaciones
+                const fechaOtorgamientoRetirado = new Date(fechaPagoRetirado + 'T00:00:00');
+                const interesesDiferidos = calcularInteresesDiferidos(
+                    montoAyudaNumerico,  // ← CAMBIADO: usar el monto solicitado original
+                    TNA,
+                    mesesDiferimientoRetirado,
+                    fechaOtorgamientoRetirado
+                );
 
                 setResultadoRetirado({
                     montoSolicitado: montoAyudaNumerico,
@@ -745,7 +832,11 @@
                     numeroCuotas: numeroCuotas,
                     totalAPagar: totalAPagar,
                     interesTotal: interesTotal,
-                    montoAfectacion: montoAfectacionCalculado
+                    montoAfectacion: montoAfectacionCalculado,
+                    interesesDiferidos: interesesDiferidos.interesesMonto,
+                    diasInteresesDiferidos: interesesDiferidos.diasCalculados,
+                    fechaPrimerVencimiento: interesesDiferidos.fechaPrimerVencimiento,
+                    mesesDiferimiento: mesesDiferimientoRetirado
                 });
             };
 
@@ -783,7 +874,7 @@
                 const nuevoId = cuotasAyudaEconomicaCaja.length > 0 
                     ? Math.max(...cuotasAyudaEconomicaCaja.map(c => c.id)) + 1 
                     : 1;
-                setCuotasAyudaEconomicaCaja([...cuotasAyudaEconomicaCaja, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' }]);
+                setCuotasAyudaEconomicaCaja([...cuotasAyudaEconomicaCaja, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' }]);
             };
             
             const actualizarCuotaAyudaCaja = (id, valor) => {
@@ -800,7 +891,15 @@
             
             const toggleCancelacionCuotaCaja = (id) => {
                 setCuotasAyudaEconomicaCaja(cuotasAyudaEconomicaCaja.map(cuota => 
-                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela } : cuota
+                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela, tasaCancelacion: !cuota.seCancela ? cuota.tasaCancelacion : '' } : cuota
+                ));
+            };
+            
+            const actualizarTasaCancelacionCaja = (id, valor) => {
+                // Permitir solo números enteros
+                const valorLimpio = valor.replace(/[^\d]/g, '');
+                setCuotasAyudaEconomicaCaja(cuotasAyudaEconomicaCaja.map(cuota => 
+                    cuota.id === id ? { ...cuota, tasaCancelacion: valorLimpio } : cuota
                 ));
             };
             
@@ -827,12 +926,63 @@
                 }, 0);
             };
 
-            // Funciones para cuotas de ayuda económica en Haberes (Caja Policial - Haberes / En Actividad)
+            // Funciones para cuotas de ayuda económica en pantalla En Actividad
+            const agregarCuotaAyudaEnActividad = () => {
+                const nuevoId = cuotasAyudaEconomicaEnActividad.length > 0 
+                    ? Math.max(...cuotasAyudaEconomicaEnActividad.map(c => c.id)) + 1 
+                    : 1;
+                setCuotasAyudaEconomicaEnActividad([...cuotasAyudaEconomicaEnActividad, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' }]);
+            };
+            
+            const actualizarCuotaAyudaEnActividad = (id, valor) => {
+                setCuotasAyudaEconomicaEnActividad(cuotasAyudaEconomicaEnActividad.map(cuota => 
+                    cuota.id === id ? { ...cuota, monto: valor } : cuota
+                ));
+            };
+            
+            const actualizarSaldoCuotaEnActividad = (id, valor) => {
+                setCuotasAyudaEconomicaEnActividad(cuotasAyudaEconomicaEnActividad.map(cuota => 
+                    cuota.id === id ? { ...cuota, saldoAyuda: valor } : cuota
+                ));
+            };
+            
+            const toggleCancelacionCuotaEnActividad = (id) => {
+                setCuotasAyudaEconomicaEnActividad(cuotasAyudaEconomicaEnActividad.map(cuota => 
+                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela, tasaCancelacion: !cuota.seCancela ? cuota.tasaCancelacion : '' } : cuota
+                ));
+            };
+            
+            const actualizarTasaCancelacionEnActividad = (id, valor) => {
+                // Permitir solo números enteros
+                const valorLimpio = valor.replace(/[^\d]/g, '');
+                setCuotasAyudaEconomicaEnActividad(cuotasAyudaEconomicaEnActividad.map(cuota => 
+                    cuota.id === id ? { ...cuota, tasaCancelacion: valorLimpio } : cuota
+                ));
+            };
+            
+            const eliminarCuotaAyudaEnActividad = (id) => {
+                if (cuotasAyudaEconomicaEnActividad.length > 1) {
+                    setCuotasAyudaEconomicaEnActividad(cuotasAyudaEconomicaEnActividad.filter(cuota => cuota.id !== id));
+                }
+            };
+            
+            const calcularTotalCuotasAyudaEnActividad = () => {
+                return cuotasAyudaEconomicaEnActividad.reduce((total, cuota) => {
+                    // Solo sumar las cuotas que se cancelen (C marcada)
+                    if (cuota.seCancela && cuota.monto) {
+                        const monto = parseNumeroDecimal(cuota.monto);
+                        return total + monto;
+                    }
+                    return total;
+                }, 0);
+            };
+
+            // Funciones para cuotas de ayuda económica en Haberes (Caja Policial - Haberes)
             const agregarCuotaAyudaHaberes = () => {
                 const nuevoId = cuotasAyudaEconomicaHaberes.length > 0 
                     ? Math.max(...cuotasAyudaEconomicaHaberes.map(c => c.id)) + 1 
                     : 1;
-                setCuotasAyudaEconomicaHaberes([...cuotasAyudaEconomicaHaberes, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes' }]);
+                setCuotasAyudaEconomicaHaberes([...cuotasAyudaEconomicaHaberes, { id: nuevoId, monto: '', saldoAyuda: '', seCancela: false, canalPago: 'haberes', tasaCancelacion: '' }]);
             };
             
             const actualizarCuotaAyudaHaberes = (id, valor) => {
@@ -849,7 +999,15 @@
             
             const toggleCancelacionCuotaHaberes = (id) => {
                 setCuotasAyudaEconomicaHaberes(cuotasAyudaEconomicaHaberes.map(cuota => 
-                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela } : cuota
+                    cuota.id === id ? { ...cuota, seCancela: !cuota.seCancela, tasaCancelacion: !cuota.seCancela ? cuota.tasaCancelacion : '' } : cuota
+                ));
+            };
+            
+            const actualizarTasaCancelacionHaberes = (id, valor) => {
+                // Permitir solo números enteros
+                const valorLimpio = valor.replace(/[^\d]/g, '');
+                setCuotasAyudaEconomicaHaberes(cuotasAyudaEconomicaHaberes.map(cuota => 
+                    cuota.id === id ? { ...cuota, tasaCancelacion: valorLimpio } : cuota
                 ));
             };
             
@@ -907,10 +1065,90 @@
                 return montoAfectacionHaberes;
             };
 
+            // Función para calcular Monto de Afectación de Haberes para En Actividad
+            const calcularMontoAfectacionDeActividad = () => {
+                if (!haberNetoActividad) return 0;
+                
+                // Reemplazar coma por punto para parseFloat
+                const haberNetoNumerico = parseFloat(haberNetoActividad.replace(/,/g, '.'));
+                
+                // Sumar solo las cuotas canceladas de En Actividad al haber neto
+                const totalCuotasCanceladas = calcularTotalCuotasAyudaEnActividad();
+                const haberNetoReal = haberNetoNumerico + totalCuotasCanceladas;
+                
+                // No hay poderdante en En Actividad, siempre es 40%
+                const porcentaje = 0.40;
+                let montoAfectacionActividad = haberNetoReal * porcentaje;
+                
+                if (esSocioNuevo) {
+                    montoAfectacionActividad = montoAfectacionActividad - CUOTA_SOCIAL;
+                }
+                
+                // Restar todas las cuotas con monto que NO estén marcadas con C (seCancela)
+                const cuotasARestar = cuotasAyudaEconomicaEnActividad.reduce((total, cuota) => {
+                    if (cuota.monto && !cuota.seCancela) {
+                        const monto = parseNumeroDecimal(cuota.monto);
+                        return total + monto;
+                    }
+                    return total;
+                }, 0);
+                
+                montoAfectacionActividad = montoAfectacionActividad - cuotasARestar;
+                return montoAfectacionActividad;
+            };
+
+            // Función para calcular el Monto Máximo Disponible en En Actividad (con doble control)
+            const calcularMontoMaximoDisponibleActividad = () => {
+                if (!cuotas) return { disponibleFinal: 0, montoRCI: 0, montoCertificado: 0 };
+                
+                const tasaMensual = (TNA / 100) / 12;
+                const numeroCuotas = parseInt(cuotas);
+                
+                const factor = (Math.pow(1 + tasaMensual, numeroCuotas) - 1) / 
+                              (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas));
+                
+                // Obtener monto de afectación del certificado
+                let montoAfectacionCertificado = parseFloat(montoAfectacion.replace(/\./g, '').replace(',', '.')) || 0;
+                
+                // Ajustar por socio nuevo
+                if (esSocioNuevo) {
+                    montoAfectacionCertificado = montoAfectacionCertificado - CUOTA_SOCIAL;
+                }
+                
+                // Calcular monto máximo basado en certificado
+                const montoMaximoCertificado = montoAfectacionCertificado * factor;
+                
+                // Si hay haber neto ingresado en En Actividad
+                if (haberNetoActividad) {
+                    // Calcular monto de afectación de haberes (capacidad según RCI)
+                    const montoAfectacionActividadCalculado = calcularMontoAfectacionDeActividad();
+                    
+                    // Calcular monto máximo basado en haberes (capacidad según RCI)
+                    const montoMaximoHaberesActividad = montoAfectacionActividadCalculado * factor;
+                    
+                    // CRITERIO DE PRUDENCIA: Tomar el MENOR de los dos
+                    const disponibleFinal = Math.min(montoMaximoCertificado, montoMaximoHaberesActividad);
+                    
+                    // Nunca superar el monto máximo absoluto
+                    return {
+                        disponibleFinal: Math.min(disponibleFinal, MONTO_MAXIMO_ABSOLUTO),
+                        montoRCI: montoMaximoHaberesActividad,
+                        montoCertificado: montoMaximoCertificado
+                    };
+                } else {
+                    // Si no hay haber neto, solo usar el certificado
+                    return {
+                        disponibleFinal: Math.min(montoMaximoCertificado, MONTO_MAXIMO_ABSOLUTO),
+                        montoRCI: 0,
+                        montoCertificado: montoMaximoCertificado
+                    };
+                }
+            };
+
             // Función para calcular el Monto Máximo Disponible en Haberes
             const calcularMontoMaximoDisponibleHaberes = () => {
                 const cuotasActuales = canalPagoCajaPolicial === 'haberes' ? cuotasHaberes : cuotas;
-                if (!cuotasActuales) return 0;
+                if (!cuotasActuales) return { disponibleFinal: 0, montoRCI: 0, montoCertificado: 0 };
                 
                 const tasaMensual = (TNA / 100) / 12;
                 const numeroCuotas = parseInt(cuotasActuales);
@@ -936,20 +1174,28 @@
                 
                 // Si estamos en Caja Policial - Haberes y hay haber neto ingresado
                 if (canalPagoCajaPolicial === 'haberes' && haberNetoHaberes) {
-                    // Calcular monto de afectación de haberes
+                    // Calcular monto de afectación de haberes (capacidad según RCI)
                     const montoAfectacionHaberesCalculado = calcularMontoAfectacionDeHaberes();
                     
-                    // Calcular monto máximo basado en haberes
+                    // Calcular monto máximo basado en haberes (capacidad según RCI)
                     const montoMaximoHaberes = montoAfectacionHaberesCalculado * factor;
                     
-                    // Tomar el MENOR de los dos
-                    const montoMaximo = Math.min(montoMaximoCertificado, montoMaximoHaberes);
+                    // CRITERIO DE PRUDENCIA: Tomar el MENOR de los dos
+                    const disponibleFinal = Math.min(montoMaximoCertificado, montoMaximoHaberes);
                     
                     // Nunca superar el monto máximo absoluto
-                    return Math.min(montoMaximo, MONTO_MAXIMO_ABSOLUTO);
+                    return {
+                        disponibleFinal: Math.min(disponibleFinal, MONTO_MAXIMO_ABSOLUTO),
+                        montoRCI: montoMaximoHaberes,
+                        montoCertificado: montoMaximoCertificado
+                    };
                 } else {
                     // Si no hay haber neto, solo usar el certificado
-                    return Math.min(montoMaximoCertificado, MONTO_MAXIMO_ABSOLUTO);
+                    return {
+                        disponibleFinal: Math.min(montoMaximoCertificado, MONTO_MAXIMO_ABSOLUTO),
+                        montoRCI: 0,
+                        montoCertificado: montoMaximoCertificado
+                    };
                 }
             };
 
@@ -1051,8 +1297,38 @@
                     return;
                 }
                 
+                // Validación del Salario Mínimo Vital y Móvil
+                // Haber Neto + Cuotas de ayudas canceladas - Cuota de la nueva ayuda >= Salario Mínimo
+                const haberNetoNumerico = parseFloat(haberNetoCaja.replace(/,/g, '.'));
+                const totalCuotasCanceladas = cuotasAyudaEconomicaCaja.reduce((total, cuota) => {
+                    if (cuota.seCancela && cuota.monto) {
+                        const monto = parseNumeroDecimal(cuota.monto);
+                        return total + monto;
+                    }
+                    return total;
+                }, 0);
+                
+                const haberDisponible = haberNetoNumerico + totalCuotasCanceladas - cuotaMensual;
+                const salarioMinimoActual = salarioMinimo || SALARIO_MINIMO_DEFAULT;
+                
+                if (haberDisponible < salarioMinimoActual) {
+                    setErrorCaja(`El haber disponible después del descuento de la cuota ($${haberDisponible.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) es menor al Salario Mínimo Vital y Móvil ($${salarioMinimoActual.toLocaleString('es-AR')}). Por favor, reduzca el monto solicitado o aumente el número de cuotas.`);
+                    return;
+                }
+                
                 const totalAPagar = cuotaMensual * numeroCuotas;
                 const interesTotal = totalAPagar - montoAjustado;
+
+                // CORRECCIÓN: Calcular intereses diferidos sobre el MONTO SOLICITADO ORIGINAL
+                // Los intereses por diferimiento se calculan sobre el monto que el socio pidió,
+                // NO sobre el monto después de restar las cancelaciones
+                const fechaOtorgamientoCaja = new Date(fechaPagoCaja + 'T00:00:00');
+                const interesesDiferidos = calcularInteresesDiferidos(
+                    montoAyudaNumerico,  // ← CAMBIADO: usar el monto solicitado original
+                    TNA,
+                    mesesDiferimientoCaja,
+                    fechaOtorgamientoCaja
+                );
 
                 setResultadoCaja({
                     montoSolicitado: montoAyudaNumerico,
@@ -1062,7 +1338,11 @@
                     numeroCuotas: numeroCuotas,
                     totalAPagar: totalAPagar,
                     interesTotal: interesTotal,
-                    montoAfectacion: montoAfectacionCalculado
+                    montoAfectacion: montoAfectacionCalculado,
+                    interesesDiferidos: interesesDiferidos.interesesMonto,
+                    diasInteresesDiferidos: interesesDiferidos.diasCalculados,
+                    fechaPrimerVencimiento: interesesDiferidos.fechaPrimerVencimiento,
+                    mesesDiferimiento: mesesDiferimientoCaja
                 });
             };
 
@@ -1134,7 +1414,7 @@
                         setMontoMaximo(MONTO_MAXIMO_ABSOLUTO);
                     }
                 }
-            }, [montoAfectacion, montoAfectacionHaberes, cuotas, cuotasHaberes, TNA, esSocioNuevo, esSocioNuevoHaberes, CUOTA_SOCIAL, canalPagoCajaPolicial, cuotasAyudaEconomicaHaberes]);
+            }, [montoAfectacion, montoAfectacionHaberes, cuotas, cuotasHaberes, TNA, esSocioNuevo, esSocioNuevoHaberes, CUOTA_SOCIAL, canalPagoCajaPolicial, cuotasAyudaEconomicaHaberes, cuotasAyudaEconomicaEnActividad]);
 
             const calcularAyuda = () => {
                 if (canalPagoCajaPolicial === 'haberes') {
@@ -1146,7 +1426,8 @@
                 }
 
                 // Validar que si hay saldo ingresado, también haya cuota ingresada
-                for (const cuota of cuotasAyudaEconomicaHaberes) {
+                const cuotasAValidar = canalPagoCajaPolicial === 'haberes' ? cuotasAyudaEconomicaHaberes : cuotasAyudaEconomicaEnActividad;
+                for (const cuota of cuotasAValidar) {
                     const tieneSaldo = cuota.saldoAyuda && cuota.saldoAyuda.trim() !== '';
                     const tieneCuota = cuota.monto && cuota.monto.trim() !== '';
                     
@@ -1185,7 +1466,7 @@
 
                 // Validación del Monto Máximo que otorga SMSV
                 // Sumar todos los saldos de ayuda económica vigente NO cancelados
-                const totalSaldosVigentesNoCancelados = cuotasAyudaEconomicaHaberes.reduce((total, cuota) => {
+                const totalSaldosVigentesNoCancelados = cuotasAValidar.reduce((total, cuota) => {
                     if (!cuota.seCancela && cuota.saldoAyuda) {
                         const saldo = parseFloat(cuota.saldoAyuda.replace(/\./g, '').replace(',', '.')) || 0;
                         return total + saldo;
@@ -1208,7 +1489,7 @@
                 }
 
                 // Calcular la suma de saldos de ayudas económicas que se cancelan (marcadas con C)
-                const saldosCancelados = cuotasAyudaEconomicaHaberes.reduce((total, cuota) => {
+                const saldosCancelados = cuotasAValidar.reduce((total, cuota) => {
                     if (cuota.seCancela && cuota.saldoAyuda) {
                         const saldo = parseFloat(cuota.saldoAyuda.replace(/\./g, '').replace(',', '.')) || 0;
                         return total + saldo;
@@ -1228,13 +1509,15 @@
                     return;
                 }
 
-                // Calcular el total de cuotas HAB canceladas para sumar al monto de afectación
-                const totalCuotasHabCanceladas = calcularTotalCuotasAyudaHaberes();
+                // Calcular el total de cuotas canceladas para sumar al monto de afectación
+                const totalCuotasCanceladas = canalPagoCajaPolicial === 'haberes' 
+                    ? calcularTotalCuotasAyudaHaberes() 
+                    : calcularTotalCuotasAyudaEnActividad();
 
                 const esSocioNuevoActual = canalPagoCajaPolicial === 'haberes' ? esSocioNuevoHaberes : esSocioNuevo;
                 
                 // Si es socio nuevo, restar la cuota social del monto de afectación del certificado
-                let montoAfectacionAjustado = montoAfectacionNumerico + totalCuotasHabCanceladas;
+                let montoAfectacionAjustado = montoAfectacionNumerico + totalCuotasCanceladas;
                 if (esSocioNuevoActual) {
                     montoAfectacionAjustado = montoAfectacionAjustado - CUOTA_SOCIAL;
                     if (montoAfectacionAjustado <= 0) {
@@ -1253,10 +1536,22 @@
                     const montoAfectacionHaberesCalculado = calcularMontoAfectacionDeHaberes();
                     
                     // Calcular el monto máximo usando ambos montos de afectación
-                    const montoMaximoCalculado = calcularMontoMaximoDisponibleHaberes();
+                    const resultadoDisponible = calcularMontoMaximoDisponibleHaberes();
                     
-                    if (montoNumerico > montoMaximoCalculado) {
-                        setErrorHaberes(`El monto máximo disponible con tu afectación y plan de cuotas es de $${montoMaximoCalculado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+                    if (montoNumerico > resultadoDisponible.disponibleFinal) {
+                        setErrorHaberes(`El monto máximo disponible con tu afectación y plan de cuotas es de $${resultadoDisponible.disponibleFinal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+                        return;
+                    }
+                } else if (canalPagoCajaPolicial !== 'haberes' && haberNetoActividad) {
+                    // Validación especial para En Actividad con haber neto
+                    // Calcular monto de afectación de haberes
+                    const montoAfectacionActividadCalculado = calcularMontoAfectacionDeActividad();
+                    
+                    // Calcular el monto máximo usando ambos montos de afectación
+                    const resultadoDisponible = calcularMontoMaximoDisponibleActividad();
+                    
+                    if (montoNumerico > resultadoDisponible.disponibleFinal) {
+                        setError(`El monto máximo disponible con tu afectación y plan de cuotas es de $${resultadoDisponible.disponibleFinal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
                         return;
                     }
                 } else {
@@ -1283,17 +1578,78 @@
                                      (Math.pow(1 + tasaMensual, numeroCuotas) - 1);
                 
                 // Validar que la cuota no supere el monto de afectación ajustado
-                if (cuotaMensual > montoAfectacionAjustado) {
+                // Para Caja Policial - Haberes y En Actividad con haber neto, también validar contra el Monto de Afectación de Haberes
+                let montoAfectacionParaValidacion = montoAfectacionAjustado;
+                
+                if (canalPagoCajaPolicial === 'haberes' && haberNetoHaberes) {
+                    const montoAfectacionHaberesCalculado = calcularMontoAfectacionDeHaberes();
+                    // Usar el MENOR entre ambos montos de afectación
+                    montoAfectacionParaValidacion = Math.min(montoAfectacionAjustado, montoAfectacionHaberesCalculado);
+                } else if (canalPagoCajaPolicial !== 'haberes' && haberNetoActividad) {
+                    const montoAfectacionActividadCalculado = calcularMontoAfectacionDeActividad();
+                    // Usar el MENOR entre ambos montos de afectación
+                    montoAfectacionParaValidacion = Math.min(montoAfectacionAjustado, montoAfectacionActividadCalculado);
+                }
+                
+                if (cuotaMensual > montoAfectacionParaValidacion) {
                     if (canalPagoCajaPolicial === 'haberes') {
-                        setErrorHaberes(`La cuota mensual ($${cuotaMensual.toFixed(2).replace('.', ',')}) supera el Monto de Afectación disponible ($${montoAfectacionAjustado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}). Por favor, reduzca el monto solicitado o aumente la cantidad de cuotas.`);
+                        setErrorHaberes(`La cuota mensual ($${cuotaMensual.toFixed(2).replace('.', ',')}) supera el Monto de Afectación disponible ($${montoAfectacionParaValidacion.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}). Por favor, reduzca el monto solicitado o aumente la cantidad de cuotas.`);
                     } else {
-                        setError(`La cuota mensual ($${cuotaMensual.toFixed(2).replace('.', ',')}) supera el Monto de Afectación disponible ($${montoAfectacionAjustado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}). Por favor, reduzca el monto solicitado o aumente la cantidad de cuotas.`);
+                        setError(`La cuota mensual ($${cuotaMensual.toFixed(2).replace('.', ',')}) supera el Monto de Afectación disponible ($${montoAfectacionParaValidacion.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}). Por favor, reduzca el monto solicitado o aumente la cantidad de cuotas.`);
                     }
                     return;
                 }
                 
+                // Validación del Salario Mínimo Vital y Móvil
+                // Haber Neto + Cuotas de ayudas canceladas - Cuota de la nueva ayuda >= Salario Mínimo
+                let haberNetoNumerico = 0;
+                
+                if (canalPagoCajaPolicial === 'haberes' && haberNetoHaberes) {
+                    haberNetoNumerico = parseFloat(haberNetoHaberes.replace(/,/g, '.'));
+                } else if (canalPagoCajaPolicial !== 'haberes' && haberNetoActividad) {
+                    haberNetoNumerico = parseFloat(haberNetoActividad.replace(/,/g, '.'));
+                }
+                
+                // Solo validar si hay haber neto ingresado
+                if (haberNetoNumerico > 0) {
+                    const totalCuotasCanceladas = cuotasAValidar.reduce((total, cuota) => {
+                        if (cuota.seCancela && cuota.monto) {
+                            const monto = parseFloat(cuota.monto.replace(/\./g, '').replace(',', '.')) || 0;
+                            return total + monto;
+                        }
+                        return total;
+                    }, 0);
+                    
+                    const haberDisponible = haberNetoNumerico + totalCuotasCanceladas - cuotaMensual;
+                    const salarioMinimoActual = salarioMinimo || SALARIO_MINIMO_DEFAULT;
+                    
+                    if (haberDisponible < salarioMinimoActual) {
+                        const mensajeError = `El haber disponible después del descuento de la cuota ($${haberDisponible.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}) es menor al Salario Mínimo Vital y Móvil ($${salarioMinimoActual.toLocaleString('es-AR')}). Por favor, reduzca el monto solicitado o aumente el número de cuotas.`;
+                        if (canalPagoCajaPolicial === 'haberes') {
+                            setErrorHaberes(mensajeError);
+                        } else {
+                            setError(mensajeError);
+                        }
+                        return;
+                    }
+                }
+                
                 const totalAPagar = cuotaMensual * numeroCuotas;
                 const interesTotal = totalAPagar - montoAjustado;
+
+                // CORRECCIÓN: Calcular intereses diferidos sobre el MONTO SOLICITADO ORIGINAL
+                // Los intereses por diferimiento se calculan sobre el monto que el socio pidió,
+                // NO sobre el monto después de restar las cancelaciones
+                const mesesDiferimientoActual = canalPagoCajaPolicial === 'haberes' ? mesesDiferimientoHaberes : mesesDiferimientoActividad;
+                const fechaOtorgamientoActual = canalPagoCajaPolicial === 'haberes' 
+                    ? new Date(fechaPagoHaberes + 'T00:00:00')
+                    : new Date(fechaPagoActividad + 'T00:00:00');
+                const interesesDiferidos = calcularInteresesDiferidos(
+                    montoNumerico,  // ← CAMBIADO: usar el monto solicitado original
+                    TNA,
+                    mesesDiferimientoActual,
+                    fechaOtorgamientoActual
+                );
 
                 if (canalPagoCajaPolicial === 'haberes') {
                     setResultadoHaberes({
@@ -1304,7 +1660,11 @@
                         numeroCuotas: numeroCuotas,
                         totalAPagar: totalAPagar,
                         interesTotal: interesTotal,
-                        montoAfectacion: montoAfectacionAjustado
+                        montoAfectacion: montoAfectacionAjustado,
+                        interesesDiferidos: interesesDiferidos.interesesMonto,
+                        diasInteresesDiferidos: interesesDiferidos.diasCalculados,
+                        fechaPrimerVencimiento: interesesDiferidos.fechaPrimerVencimiento,
+                        mesesDiferimiento: mesesDiferimientoActual
                     });
                 } else {
                     setResultado({
@@ -1315,7 +1675,11 @@
                         numeroCuotas: numeroCuotas,
                         totalAPagar: totalAPagar,
                         interesTotal: interesTotal,
-                        montoAfectacion: montoAfectacionAjustado
+                        montoAfectacion: montoAfectacionAjustado,
+                        interesesDiferidos: interesesDiferidos.interesesMonto,
+                        diasInteresesDiferidos: interesesDiferidos.diasCalculados,
+                        fechaPrimerVencimiento: interesesDiferidos.fechaPrimerVencimiento,
+                        mesesDiferimiento: mesesDiferimientoActual
                     });
                 }
             };
@@ -1336,7 +1700,7 @@
                 setEsSocioNuevo(false);
                 setEsSocioNuevoHaberes(false);
                 setModificarCuotaSocial(false);
-                setCuotaSocialPersonalizada('20070');
+                setCuotaSocialPersonalizada('20470');
                 setCuotaSocialEditadaManualmente(false);
             };
 
@@ -1347,18 +1711,15 @@
                 let mensaje = `💰 *Monto solicitado:* $${resultadoActual.montoSolicitado.toLocaleString('es-AR')}
 `;
                 
-                if (resultadoActual.saldosCancelados && resultadoActual.saldosCancelados > 0) {
-                    mensaje += `💳 *Saldos cancelados:* -$${resultadoActual.saldosCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-💵 *Monto a otorgar:* $${resultadoActual.montoAjustado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-`;
-                }
-                
                 mensaje += `📅 *Cantidad de cuotas:* ${resultadoActual.numeroCuotas} cuotas
 💵 *Cuota mensual:* $${resultadoActual.cuotaMensual.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
 📊 *TNA:* ${TNA}%
-
-⚠ *Importante:* Tener en cuenta que el monto a cobrar será inferior al otorgado, ya que se descontarán los intereses correspondientes al período previo al pago de tu primera cuota.
-Al importe de la cuota pueden sumarse cargos por cuota social y por contratación de subsidio adicional variable.`;
+`;
+                
+                // Agregar información de intereses diferidos (SIEMPRE se muestran)
+                const liquidoRecibir = resultadoActual.montoAjustado - resultadoActual.interesesDiferidos;
+                
+                mensaje += `💰 *Líquido a recibir aproximado:* $${liquidoRecibir.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
                 const mensajeCodificado = encodeURIComponent(mensaje);
                 const urlWhatsApp = `https://wa.me/?text=${mensajeCodificado}`;
@@ -1372,18 +1733,15 @@ Al importe de la cuota pueden sumarse cargos por cuota social y por contratació
                 let mensaje = `💰 *Monto solicitado:* $${resultadoRetirado.montoSolicitado.toLocaleString('es-AR')}
 `;
                 
-                if (resultadoRetirado.totalSaldosCancelados > 0) {
-                    mensaje += `💳 *Saldos cancelados:* -$${resultadoRetirado.totalSaldosCancelados.toLocaleString('es-AR')}
-💵 *Monto a otorgar:* $${resultadoRetirado.montoSolicitadoReal.toLocaleString('es-AR')}
-`;
-                }
-                
                 mensaje += `📅 *Cantidad de cuotas:* ${resultadoRetirado.numeroCuotas} cuotas
 💵 *Cuota mensual:* $${resultadoRetirado.cuotaMensual.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
 📊 *TNA:* ${TNA}%
-
-⚠ *Importante:* Tener en cuenta que el monto a cobrar será inferior al otorgado, ya que se descontarán los intereses correspondientes al período previo al pago de tu primera cuota.
-Al importe de la cuota pueden sumarse cargos por cuota social y por contratación de subsidio adicional variable.`;
+`;
+                
+                // Agregar información de intereses diferidos (SIEMPRE se muestran)
+                const liquidoRecibir = resultadoRetirado.montoSolicitadoReal - resultadoRetirado.interesesDiferidos;
+                
+                mensaje += `💰 *Líquido a recibir aproximado:* $${liquidoRecibir.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
                 const mensajeCodificado = encodeURIComponent(mensaje);
                 const urlWhatsApp = `https://wa.me/?text=${mensajeCodificado}`;
@@ -1397,18 +1755,15 @@ Al importe de la cuota pueden sumarse cargos por cuota social y por contratació
                 let mensaje = `💰 *Monto solicitado:* $${resultadoCaja.montoSolicitado.toLocaleString('es-AR')}
 `;
                 
-                if (resultadoCaja.saldosCancelados > 0) {
-                    mensaje += `💳 *Saldos cancelados:* -$${resultadoCaja.saldosCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-💵 *Monto a otorgar:* $${resultadoCaja.montoAjustado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-`;
-                }
-                
                 mensaje += `📅 *Cantidad de cuotas:* ${resultadoCaja.numeroCuotas} cuotas
 💵 *Cuota mensual:* $${resultadoCaja.cuotaMensual.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
 📊 *TNA:* ${TNA}%
-
-⚠ *Importante:* Tener en cuenta que el monto a cobrar será inferior al otorgado, ya que se descontarán los intereses correspondientes al período previo al pago de tu primera cuota.
-Al importe de la cuota pueden sumarse cargos por cuota social y por contratación de subsidio adicional variable.`;
+`;
+                
+                // Agregar información de intereses diferidos (SIEMPRE se muestran)
+                const liquidoRecibir = resultadoCaja.montoAjustado - resultadoCaja.interesesDiferidos;
+                
+                mensaje += `💰 *Líquido a recibir aproximado:* $${liquidoRecibir.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
                 const mensajeCodificado = encodeURIComponent(mensaje);
                 const urlWhatsApp = `https://wa.me/?text=${mensajeCodificado}`;
@@ -1482,6 +1837,37 @@ Al importe de la cuota pueden sumarse cargos por cuota social y por contratació
             // Función para generar PDF y compartir por WhatsApp
             const generarYCompartirPDF = async () => {
                 try {
+                    // Función helper para cargar scripts dinámicamente
+                    const cargarScript = (src) => {
+                        return new Promise((resolve, reject) => {
+                            // Verificar si ya está cargado
+                            const scriptExistente = document.querySelector(`script[src="${src}"]`);
+                            if (scriptExistente) {
+                                resolve();
+                                return;
+                            }
+                            
+                            const script = document.createElement('script');
+                            script.src = src;
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        });
+                    };
+                    
+                    // Cargar jsPDF y autotable solo cuando se necesitan
+                    if (!window.jspdf) {
+                        await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+                    }
+                    
+                    // Esperar un momento para que jsPDF se inicialice
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    if (!window.jspdf.jsPDF.API.autoTable) {
+                        await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js');
+                    }
+                    
+                    // Ahora que las librerías están cargadas, generar el PDF
                     const { jsPDF } = window.jspdf;
                     const doc = new jsPDF('landscape');
                     
@@ -1588,18 +1974,19 @@ Al importe de la cuota pueden sumarse cargos por cuota social y por contratació
             // Pantalla de menú inicial
             if (pantalla === 'menu') {
                 return (
-                    <div className="container mx-auto px-4 py-4 max-w-2xl">{/* Logo */}
-                        <div className="flex justify-center mb-2">
+                    <div className="container mx-auto px-4 py-4 max-w-2xl">
+                        {/* Logo SMSV - Solo en pantalla principal */}
+                        <div className="mb-6 text-center">
                             <img 
                                 src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                alt="Logo SMSV" 
-                                className="h-16 object-contain"
+                                alt="SMSV Logo" 
+                                className="mx-auto h-16 w-auto"
                             />
                         </div>
 
                         {/* Título de la App */}
                         <h1 className="text-xl font-bold text-[#155E75] text-center mb-1">
-                            RC Móvil
+                            RC Lite
                         </h1>
                         <p className="text-xs text-gray-600 text-center mb-3">
                             Closed BETA
@@ -1616,7 +2003,7 @@ Al importe de la cuota pueden sumarse cargos por cuota social y por contratació
                                 onClick={() => setPantalla('actividad')}
                                 className="w-full bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg text-base shadow-lg transition-all transform hover:scale-105"
                             >
-                                <span className="text-2xl">🪖</span> Socios con Cert. de Haberes
+                                <span className="text-2xl">🪖</span> Personal en Actividad
                             </button>
                             
                             <button
@@ -1683,7 +2070,7 @@ Prestación de Servicio.`;
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
                                 </svg>
-                                Mensajes Predeterminados
+                                Mensajes Predefinidos
                             </button>
                         </div>
                         {/* Tabla de Ayudas Económicas */}
@@ -1750,7 +2137,7 @@ Prestación de Servicio.`;
                                 </div>
                                 
                                 <p className="text-sm text-gray-600 mb-2 text-center">
-                                    TNA: {TNA}% - Valores orientativos de cuotas mensuales
+                                    TNA: {TNA}%
                                 </p>
                                 <p className="text-xs text-blue-600 mb-2 text-center font-semibold">
                                     👉 Deslizá la tabla hacia los lados para ver todos los planes
@@ -1794,12 +2181,6 @@ Prestación de Servicio.`;
                                         </tbody>
                                     </table>
                                 </div>
-                                
-                                <div className="mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
-                                    <p className="text-xs text-gray-700">
-                                        <strong>Nota:</strong> Los valores mostrados son aproximados y pueden variar. Para información exacta, consultá con nuestros representantes o acercándote a Casa Central o nuestras filiales.
-                                    </p>
-                                </div>
                             </div>
                         )}
 
@@ -1813,15 +2194,6 @@ Prestación de Servicio.`;
             if (pantalla === 'retirado') {
                 return (
                     <div className="container mx-auto px-4 py-8 max-w-2xl">
-                        {/* Logo */}
-                        <div className="flex justify-center mb-4">
-                            <img 
-                                src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                alt="Logo SMSV" 
-                                className="h-24 object-contain"
-                            />
-                        </div>
-
                         {/* Botón Volver y Título */}
                         <div className="flex items-center justify-between mb-6 gap-2">
                             <button
@@ -1950,14 +2322,10 @@ Prestación de Servicio.`;
 
                         {/* Formulario de Haber Neto y Poderdante */}
                         <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-6">
-                            <h2 className="text-2xl font-bold text-orange-600 mb-6 text-center">
-                                💰 Información de Haber
-                            </h2>
-
                             {/* Campo Haber Neto */}
                             <div className="mb-6">
                                 <label className="block text-gray-700 text-lg font-semibold mb-3">
-                                    💵 Haber Neto
+                                    💵 Ingrese su Haber Neto
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
@@ -1982,9 +2350,6 @@ Prestación de Servicio.`;
                                         <button
                                             onClick={() => {
                                                 setEsSocioNuevoRetirado(true);
-                                                if (!cuotaSocialEditadaManualmente) {
-                                                    buscarCuotaSocialVigente();
-                                                }
                                             }}
                                             className={`py-1 px-4 rounded-lg font-semibold text-sm transition-all ${
                                                 esSocioNuevoRetirado
@@ -2027,11 +2392,6 @@ Prestación de Servicio.`;
                                             {modificarCuotaSocial ? '✓ Aplicar' : '✏️ Modificar'}
                                         </button>
                                     </div>
-                                    {!modificarCuotaSocial && (
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            {buscandoCuotaSocial ? '🔄 Actualizando cuota vigente...' : '✓ Cuota actualizada automáticamente desde www.smsv.com.ar'}
-                                        </p>
-                                    )}
                                     {modificarCuotaSocial && (
                                         <div className="mt-2">
                                             <input
@@ -2046,9 +2406,6 @@ Prestación de Servicio.`;
                                                 placeholder="Ingrese monto de cuota social"
                                                 className="w-full px-3 py-2 text-sm border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
                                             />
-                                            {buscandoCuotaSocial && (
-                                                <p className="text-xs text-blue-600 mt-1">🔄 Buscando cuota vigente...</p>
-                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -2090,7 +2447,7 @@ Prestación de Servicio.`;
                                 <div className="mb-6">
                                     <div className="flex justify-between items-center mb-3">
                                         <label className="block text-gray-700 text-lg font-semibold">
-                                            💳 Cuotas de Ayuda Económica
+                                            💳 Ayudas Económicas Vigentes
                                         </label>
                                     </div>
                                     
@@ -2188,11 +2545,25 @@ Prestación de Servicio.`;
                             {/* Campo Monto de Ayuda Económica */}
                             {haberNeto && (
                                 <div className="mt-6">
-                                    <div className="mb-2">
-                                        <p className="text-sm font-bold text-blue-600">
-                                            Monto Máximo Disponible: ${calcularMontoMaximoDisponible().toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                        </p>
-                                    </div>
+                                    {/* Mostrar Monto Disponible */}
+                                    {(() => {
+                                        const disponible = calcularMontoMaximoDisponible();
+                                        
+                                        // Solo mostrar si hay un monto disponible calculado
+                                        if (disponible > 0) {
+                                            return (
+                                                <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-400">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-sm font-semibold text-gray-700">💼 Monto Disponible:</span>
+                                                        <span className="text-2xl font-bold text-blue-700">
+                                                            ${disponible.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                     <label className="block text-gray-700 text-lg font-semibold mb-3 whitespace-nowrap">
                                         💵 Indique Monto de Ayuda Económica
                                     </label>
@@ -2210,6 +2581,60 @@ Prestación de Servicio.`;
                                             className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
                                         />
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Campo Fecha de Pago */}
+                            {haberNeto && montoAyudaEconomica && (
+                                <div className="mt-6">
+                                    <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                        📅 Fecha de Pago
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={fechaPagoRetirado}
+                                        onChange={(e) => setFechaPagoRetirado(e.target.value)}
+                                        className="w-full px-4 py-3 text-lg border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Fecha de corte: {FECHA_CORTE}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Plan de Diferimiento */}
+                            {haberNeto && montoAyudaEconomica && (
+                                <div className="mt-6">
+                                    <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                        📆 Plan de Diferimiento
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => setMesesDiferimientoRetirado(0)}
+                                            className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                                                mesesDiferimientoRetirado === 0
+                                                    ? 'bg-green-600 text-white shadow-lg'
+                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            Sin Diferimiento
+                                        </button>
+                                        <button
+                                            onClick={() => setMesesDiferimientoRetirado(3)}
+                                            className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                                                mesesDiferimientoRetirado === 3
+                                                    ? 'bg-orange-600 text-white shadow-lg'
+                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            Diferido 3 Meses
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mt-2">
+                                        {mesesDiferimientoRetirado === 0 
+                                            ? 'Inicio de amortización el mes siguiente al otorgamiento' 
+                                            : 'Inicio de amortización 3 meses después del otorgamiento. Se cobrarán intereses anticipados.'}
+                                    </p>
                                 </div>
                             )}
 
@@ -2300,6 +2725,61 @@ Prestación de Servicio.`;
                                     >
                                         🧮 Calcular
                                     </button>
+                                    
+                                    {/* Salario Mínimo Vital y Móvil */}
+                                    <div className="mt-3 text-center">
+                                        <p className="text-xs text-black">
+                                            {salarioMinimo ? (
+                                                `Salario Mínimo Vital y Móvil: $${salarioMinimo.toLocaleString('es-AR')}`
+                                            ) : (
+                                                'Salario Mínimo: No disponible'
+                                            )}
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                setModificarSalarioMinimo(!modificarSalarioMinimo);
+                                                if (!modificarSalarioMinimo) {
+                                                    setSalarioMinimoPersonalizado(salarioMinimo?.toString() || SALARIO_MINIMO_DEFAULT.toString());
+                                                }
+                                            }}
+                                            className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+                                        >
+                                            {modificarSalarioMinimo ? '✖ Cancelar edición' : '✏️ Editar manualmente'}
+                                        </button>
+                                        
+                                        {modificarSalarioMinimo && (
+                                            <div className="mt-3 bg-blue-50 p-3 rounded-lg">
+                                                <input
+                                                    type="number"
+                                                    step="1"
+                                                    value={salarioMinimoPersonalizado}
+                                                    onChange={(e) => setSalarioMinimoPersonalizado(e.target.value)}
+                                                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none text-center"
+                                                    placeholder="Ingrese el salario mínimo"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const nuevoSalario = parseFloat(salarioMinimoPersonalizado);
+                                                        if (!isNaN(nuevoSalario) && nuevoSalario > 0) {
+                                                            setSalarioMinimo(nuevoSalario);
+                                                            setSalarioMinimoEditadoManualmente(true);
+                                                            localStorage.setItem('salarioMinimoPersonalizado', salarioMinimoPersonalizado);
+                                                            localStorage.setItem('salarioMinimoEditadoManualmente', 'true');
+                                                            setModificarSalarioMinimo(false);
+                                                        } else {
+                                                            alert('Por favor ingrese un valor válido');
+                                                        }
+                                                    }}
+                                                    className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                                >
+                                                    ✓ Guardar Salario Mínimo
+                                                </button>
+                                                <p className="text-xs text-gray-600 mt-2">
+                                                    Este valor se guardará hasta que se suba una nueva versión
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -2312,36 +2792,60 @@ Prestación de Servicio.`;
                                 </h2>
 
                                 <div className="space-y-4 mb-6">
-                                    <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                                        <span className="text-gray-700 font-semibold">Monto solicitado:</span>
-                                        <span className="text-xl font-bold text-blue-900">
-                                            ${resultadoRetirado.montoSolicitado.toLocaleString('es-AR')}
-                                        </span>
+                                    {/* Desglose del Monto Líquido */}
+                                    <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
+                                        <h3 className="text-lg font-bold text-blue-900 mb-3">💰 Desglose del Monto Líquido</h3>
+                                        
+                                        <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                            <span className="text-gray-700 font-semibold">(+) Monto Solicitado:</span>
+                                            <span className="text-lg font-bold text-blue-900">
+                                                ${resultadoRetirado.montoSolicitado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* PRIMERO: Intereses por Diferimiento (se calculan sobre el monto solicitado) */}
+                                        <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                            <span className="text-gray-700 font-semibold">(-) Intereses por Diferimiento ({resultadoRetirado.diasInteresesDiferidos} días):</span>
+                                            <span className="text-lg font-bold text-red-600">
+                                                -${resultadoRetirado.interesesDiferidos.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* SEGUNDO: Cancelación de Ayudas */}
+                                        {resultadoRetirado.totalSaldosCancelados > 0 && (
+                                            <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                                <span className="text-gray-700 font-semibold">(-) Cancelación de Ayudas:</span>
+                                                <span className="text-lg font-bold text-red-600">
+                                                    -${resultadoRetirado.totalSaldosCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                </span>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="flex justify-between items-center py-3 mt-2">
+                                            <span className="text-gray-800 font-bold text-lg">(=) Monto Líquido a Recibir:</span>
+                                            <span className="text-2xl font-bold text-green-700">
+                                                ${(resultadoRetirado.montoSolicitado - (resultadoRetirado.interesesDiferidos || 0) - (resultadoRetirado.totalSaldosCancelados || 0)).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </span>
+                                        </div>
+                                        
+                                        <p className="text-xs text-gray-600 mt-2">
+                                            Plan: {resultadoRetirado.mesesDiferimiento === 3 ? 'Diferido 3 meses' : 'Inmediato'} | Fecha del 1er vencimiento: {new Date(resultadoRetirado.fechaPrimerVencimiento).toLocaleDateString('es-AR')}
+                                        </p>
                                     </div>
-                                    
-                                    {resultadoRetirado.totalSaldosCancelados > 0 && (
-                                        <>
-                                            <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
-                                                <span className="text-gray-700 font-semibold">Saldos de ayudas canceladas:</span>
-                                                <span className="text-xl font-bold text-orange-600">
-                                                    -${resultadoRetirado.totalSaldosCancelados.toLocaleString('es-AR')}
-                                                </span>
-                                            </div>
-                                            
-                                            <div className="flex justify-between items-center p-4 bg-blue-100 rounded-lg border-2 border-blue-300">
-                                                <span className="text-gray-700 font-semibold">Monto a otorgar:</span>
-                                                <span className="text-xl font-bold text-blue-900">
-                                                    ${resultadoRetirado.montoSolicitadoReal.toLocaleString('es-AR')}
-                                                </span>
-                                            </div>
-                                        </>
-                                    )}
 
-                                    <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
-                                        <span className="text-gray-700 font-semibold">Cantidad de cuotas:</span>
-                                        <span className="text-xl font-bold text-orange-600">
-                                            {resultadoRetirado.numeroCuotas} cuotas
-                                        </span>
+                                    {/* Información del Plan */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-4 bg-orange-50 rounded-lg text-center">
+                                            <span className="text-gray-700 font-semibold block mb-1">Cantidad de cuotas:</span>
+                                            <span className="text-xl font-bold text-orange-600">
+                                                {resultadoRetirado.numeroCuotas}
+                                            </span>
+                                        </div>
+
+                                        <div className="p-4 bg-blue-50 rounded-lg text-center">
+                                            <span className="text-gray-700 font-semibold block mb-1">TNA:</span>
+                                            <span className="text-xl font-bold text-blue-800">{TNA}%</span>
+                                        </div>
                                     </div>
 
                                     <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg border-2 border-green-300">
@@ -2349,11 +2853,6 @@ Prestación de Servicio.`;
                                         <span className="text-2xl font-bold text-green-600">
                                             ${resultadoRetirado.cuotaMensual.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                         </span>
-                                    </div>
-
-                                    <div className="p-4 bg-blue-100 rounded-lg text-center">
-                                        <span className="text-gray-700 font-semibold">TNA: </span>
-                                        <span className="text-xl font-bold text-blue-800">{TNA}%</span>
                                     </div>
                                 </div>
 
@@ -2381,8 +2880,9 @@ Prestación de Servicio.`;
                                             setResultadoRetirado(null);
                                             setErrorRetirado('');
                                             setCuotas('72');
+                                            setMesesDiferimientoRetirado(0);
                                             setModificarCuotaSocial(false);
-                                            setCuotaSocialPersonalizada('20070');
+                                            setCuotaSocialPersonalizada('20470');
                                             setCuotaSocialEditadaManualmente(false);
                                             setCuotasAyudaEconomica([
                                                 { id: 1, monto: '', saldoAyuda: '', seCancela: false },
@@ -2394,50 +2894,6 @@ Prestación de Servicio.`;
                                     >
                                         🔄 Reiniciar cálculo
                                     </button>
-                                </div>
-
-                                {/* Texto informativo */}
-                                <div className="p-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                                    <p className="text-gray-800 font-semibold mb-3">
-                                        <span className="text-yellow-600">⚠️</span> Importante: Esta simulación es orientativa.
-                                    </p>
-                                    <p className="text-gray-700 mb-3">
-                                        Para solicitar tu ayuda económica, acercate a nuestra Casa Central en <strong>Av. Córdoba 1674, C.A.B.A.</strong> o a cualquiera de nuestras filiales.
-                                    </p>
-                                    <a 
-                                        href="https://www.smsv.com.ar/filiales" 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all mb-3"
-                                    >
-                                        🏢 Listado de Filiales
-                                    </a>
-                                    <p className="text-gray-700 mb-2">
-                                        <strong>Horario:</strong> lunes a viernes de 7:45 a 13 hs.
-                                    </p>
-                                    <p className="text-gray-700 mb-3">
-                                        ¿Estás lejos de una filial? Contactate con algunos de nuestros representantes:
-                                    </p>
-                                    <a 
-                                        href="https://www.smsv.com.ar/representantes/" 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all mb-4"
-                                    >
-                                        👥 Listado de Representantes
-                                    </a>
-                                    <p className="text-gray-700 mb-4 text-center">
-                                        ¿Querés saber los requisitos para acceder a tu ayuda económica?<br />
-                                        Presiona el siguiente botón:
-                                    </p>
-                                    <a 
-                                        href="https://www.smsv.com.ar/ayudas-economicas/personales-en-pesos/#caracteristicas" 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all"
-                                    >
-                                        📋 Características y Requisitos
-                                    </a>
                                 </div>
                             </div>
                         )}
@@ -2452,15 +2908,6 @@ Prestación de Servicio.`;
             if (pantalla === 'ayuda') {
                 return (
                     <div className="container mx-auto px-4 py-8 max-w-2xl">
-                        {/* Logo */}
-                        <div className="flex justify-center mb-4">
-                            <img 
-                                src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                alt="Logo SMSV" 
-                                className="h-24 object-contain"
-                            />
-                        </div>
-
                         {/* Botón Volver */}
                         <button
                             onClick={() => setPantalla('actividad')}
@@ -2517,81 +2964,10 @@ Prestación de Servicio.`;
             }
 
             // Pantalla de Ayuda para En Actividad
-            if (pantalla === 'ayudaEnActividad') {
-                return (
-                    <div className="container mx-auto px-4 py-8 max-w-2xl">
-                        {/* Logo */}
-                        <div className="flex justify-center mb-4">
-                            <img 
-                                src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                alt="Logo SMSV" 
-                                className="h-24 object-contain"
-                            />
-                        </div>
-
-                        {/* Botón Volver */}
-                        <button
-                            onClick={() => setPantalla('actividad')}
-                            className="mb-6 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-all flex items-center gap-2"
-                        >
-                            ← Volver
-                        </button>
-
-                        {/* Contenido de ayuda */}
-                        <div className="bg-white rounded-lg shadow-xl p-6 mb-6">
-                            <div className="space-y-4 text-gray-700">
-                                <p className="font-semibold text-lg text-[#155E75] mb-4">
-                                    Cálculo de Monto de Precancelación por Fuerza
-                                </p>
-
-                                <div className="border-t-2 border-gray-200 pt-4">
-                                    <h2 className="font-bold text-lg mb-2 text-[#155E75]">
-                                        EJÉRCITO, FUERZA AÉREA, GENDARMERIA, PREFECTURA POLICIA FEDERAL, PCI POLICIA y PSA:
-                                    </h2>
-                                    <p>
-                                        Se admite ingreso de Monto de Afectación de Certificado de Haberes y Precancelación.
-                                    </p>
-                                </div>
-
-                                <div className="border-t-2 border-gray-200 pt-4">
-                                    <h2 className="font-bold text-lg mb-2 text-[#155E75]">
-                                        MARINA:
-                                    </h2>
-                                    <p>
-                                        El Monto de Afectación está dado por el informado en el Certificado de Haberes, en el Certificado de Precancelación o la sumatoria de ambos en caso de que el socio presente los 2 certificados.
-                                    </p>
-                                </div>
-
-                                <div className="border-t-2 border-gray-200 pt-4">
-                                    <h2 className="font-bold text-lg mb-2 text-[#155E75]">
-                                        SERVICIO PENITENCIARIO:
-                                    </h2>
-                                    <p>
-                                        Se admite el ingreso de Monto de Afectación del Certificado de Haberes. En caso de la presentación del Certificado de Precancelación, el Monto Afectación está dado por la sumatoria del monto de afectación del Certificado de Haberes y la cuota del préstamo que el socio quiera cancelar. Se debe buscar el importe de la cuota del préstamo a cancelar en el recibo de haberes.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
-                    </div>
-                );
-            }
-
-            // Pantalla de Mensajes Predeterminados
+            // Pantalla de Mensajes Predefinidos
             if (pantalla === 'mensajes') {
                 return (
                     <div className="container mx-auto px-4 py-8 max-w-2xl">
-                        {/* Logo */}
-                        <div className="flex justify-center mb-4">
-                            <img 
-                                src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                alt="Logo SMSV" 
-                                className="h-24 object-contain"
-                            />
-                        </div>
-
                         {/* Botón Volver */}
                         <button
                             onClick={() => {
@@ -2609,7 +2985,7 @@ Prestación de Servicio.`;
 
                         {/* Título */}
                         <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
-                            💬 Mensajes Predeterminados
+                            💬 Mensajes Predefinidos
                         </h1>
 
                         {/* Formulario para nuevo mensaje */}
@@ -2882,15 +3258,6 @@ Prestación de Servicio.`;
 
                 return (
                     <div className="container mx-auto px-4 py-8 max-w-3xl">
-                        {/* Logo */}
-                        <div className="flex justify-center mb-4">
-                            <img 
-                                src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                alt="Logo SMSV" 
-                                className="h-24 object-contain"
-                            />
-                        </div>
-
                         {/* Botón Volver */}
                         <button
                             onClick={() => {
@@ -2957,15 +3324,6 @@ Prestación de Servicio.`;
                 if (!canalPagoCajaPolicial) {
                     return (
                         <div className="container mx-auto px-4 py-8 max-w-2xl">
-                            {/* Logo */}
-                            <div className="flex justify-center mb-4">
-                                <img 
-                                    src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                    alt="Logo SMSV" 
-                                    className="h-24 object-contain"
-                                />
-                            </div>
-
                             {/* Contenedor principal */}
                             <div className="bg-white rounded-xl shadow-2xl p-6 border-4 border-[#1e3a8a]">
                                 {/* Botón Volver y Título */}
@@ -3016,15 +3374,6 @@ Prestación de Servicio.`;
                 if (canalPagoCajaPolicial === 'caja') {
                     return (
                         <div className="container mx-auto px-4 py-8 max-w-2xl">
-                            {/* Logo */}
-                            <div className="flex justify-center mb-4">
-                                <img 
-                                    src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                                    alt="Logo SMSV" 
-                                    className="h-24 object-contain"
-                                />
-                            </div>
-
                             {/* Botón Volver y Título */}
                             <div className="flex items-center justify-between mb-6 gap-2">
                                 <button
@@ -3201,9 +3550,6 @@ Prestación de Servicio.`;
                                                 <button
                                                     onClick={() => {
                                                         setEsSocioNuevoCaja(true);
-                                                        if (!cuotaSocialEditadaManualmente) {
-                                                            buscarCuotaSocialVigente();
-                                                        }
                                                     }}
                                                     className={`py-2 px-6 rounded-lg font-semibold text-sm transition-all ${
                                                         esSocioNuevoCaja
@@ -3225,9 +3571,6 @@ Prestación de Servicio.`;
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="text-sm text-gray-600 mt-2">
-                                            Los socios nuevos deben pagar una cuota social de <strong>${CUOTA_SOCIAL.toLocaleString('es-AR')}</strong>
-                                        </p>
                                     </div>
                                 )}
 
@@ -3245,11 +3588,6 @@ Prestación de Servicio.`;
                                                 {modificarCuotaSocial ? '✓ Aplicar' : '✏️ Modificar'}
                                             </button>
                                         </div>
-                                        {!modificarCuotaSocial && (
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                {buscandoCuotaSocial ? '🔄 Actualizando cuota vigente...' : '✓ Cuota actualizada automáticamente desde www.smsv.com.ar'}
-                                            </p>
-                                        )}
                                         {modificarCuotaSocial && (
                                             <div className="mt-3">
                                                 <input
@@ -3261,15 +3599,12 @@ Prestación de Servicio.`;
                                                         setCuotaSocialPersonalizada(valor);
                                                         setCuotaSocialEditadaManualmente(true);
                                                     }}
-                                                    placeholder="20070"
+                                                    placeholder="20470"
                                                     className="w-full px-3 py-2 text-sm border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
                                                 />
                                                 <p className="text-xs text-gray-500 mt-1">
                                                     Ingrese el monto sin puntos ni comas
                                                 </p>
-                                                {buscandoCuotaSocial && (
-                                                    <p className="text-xs text-blue-600 mt-1">🔄 Buscando cuota vigente...</p>
-                                                )}
                                             </div>
                                         )}
                                         <p className="text-xs text-gray-500 mt-2">
@@ -3314,7 +3649,7 @@ Prestación de Servicio.`;
                                     <div className="mb-6">
                                         <div className="flex justify-between items-center mb-3">
                                             <label className="block text-gray-700 text-lg font-semibold">
-                                                💳 Cuotas de Ayuda Económica
+                                                💳 Ayudas Económicas Vigentes
                                             </label>
                                         </div>
                                         
@@ -3418,11 +3753,25 @@ Prestación de Servicio.`;
                                 {/* Campo Monto de Ayuda Económica */}
                                 {haberNetoCaja && (
                                     <div className="mt-6">
-                                        <div className="mb-2">
-                                            <p className="text-sm font-bold text-blue-600">
-                                                Monto Máximo Disponible: ${calcularMontoMaximoDisponibleCaja().toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                            </p>
-                                        </div>
+                                        {/* Mostrar Monto Disponible */}
+                                        {(() => {
+                                            const disponible = calcularMontoMaximoDisponibleCaja();
+                                            
+                                            // Solo mostrar si hay un monto disponible calculado
+                                            if (disponible > 0) {
+                                                return (
+                                                    <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-400">
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-sm font-semibold text-gray-700">💼 Monto Disponible:</span>
+                                                            <span className="text-2xl font-bold text-blue-700">
+                                                                ${disponible.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                         <label className="block text-gray-700 text-lg font-semibold mb-3 whitespace-nowrap">
                                             💵 Indique Monto de Ayuda Económica
                                         </label>
@@ -3440,6 +3789,60 @@ Prestación de Servicio.`;
                                                 className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
                                             />
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Campo Fecha de Pago */}
+                                {haberNetoCaja && montoAyudaEconomicaCaja && (
+                                    <div className="mt-6">
+                                        <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                            📅 Fecha de Pago
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={fechaPagoCaja}
+                                            onChange={(e) => setFechaPagoCaja(e.target.value)}
+                                            className="w-full px-4 py-3 text-lg border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Fecha de corte: {FECHA_CORTE}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Plan de Diferimiento */}
+                                {haberNetoCaja && montoAyudaEconomicaCaja && (
+                                    <div className="mt-6">
+                                        <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                            📆 Plan de Diferimiento
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={() => setMesesDiferimientoCaja(0)}
+                                                className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                                                    mesesDiferimientoCaja === 0
+                                                        ? 'bg-green-600 text-white shadow-lg'
+                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                Sin Diferimiento
+                                            </button>
+                                            <button
+                                                onClick={() => setMesesDiferimientoCaja(3)}
+                                                className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                                                    mesesDiferimientoCaja === 3
+                                                        ? 'bg-orange-600 text-white shadow-lg'
+                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                Diferido 3 Meses
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-gray-600 mt-2">
+                                            {mesesDiferimientoCaja === 0 
+                                                ? 'Inicio de amortización el mes siguiente al otorgamiento' 
+                                                : 'Inicio de amortización 3 meses después del otorgamiento. Se cobrarán intereses anticipados.'}
+                                        </p>
                                     </div>
                                 )}
 
@@ -3530,6 +3933,61 @@ Prestación de Servicio.`;
                                         >
                                             🧮 Calcular
                                         </button>
+                                        
+                                        {/* Salario Mínimo Vital y Móvil */}
+                                        <div className="mt-3 text-center">
+                                            <p className="text-xs text-black">
+                                                {salarioMinimo ? (
+                                                    `Salario Mínimo Vital y Móvil: $${salarioMinimo.toLocaleString('es-AR')}`
+                                                ) : (
+                                                    'Salario Mínimo: No disponible'
+                                                )}
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    setModificarSalarioMinimo(!modificarSalarioMinimo);
+                                                    if (!modificarSalarioMinimo) {
+                                                        setSalarioMinimoPersonalizado(salarioMinimo?.toString() || SALARIO_MINIMO_DEFAULT.toString());
+                                                    }
+                                                }}
+                                                className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+                                            >
+                                                {modificarSalarioMinimo ? '✖ Cancelar edición' : '✏️ Editar manualmente'}
+                                            </button>
+                                            
+                                            {modificarSalarioMinimo && (
+                                                <div className="mt-3 bg-blue-50 p-3 rounded-lg">
+                                                    <input
+                                                        type="number"
+                                                        step="1"
+                                                        value={salarioMinimoPersonalizado}
+                                                        onChange={(e) => setSalarioMinimoPersonalizado(e.target.value)}
+                                                        className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none text-center"
+                                                        placeholder="Ingrese el salario mínimo"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const nuevoSalario = parseFloat(salarioMinimoPersonalizado);
+                                                            if (!isNaN(nuevoSalario) && nuevoSalario > 0) {
+                                                                setSalarioMinimo(nuevoSalario);
+                                                                setSalarioMinimoEditadoManualmente(true);
+                                                                localStorage.setItem('salarioMinimoPersonalizado', salarioMinimoPersonalizado);
+                                                                localStorage.setItem('salarioMinimoEditadoManualmente', 'true');
+                                                                setModificarSalarioMinimo(false);
+                                                            } else {
+                                                                alert('Por favor ingrese un valor válido');
+                                                            }
+                                                        }}
+                                                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                                    >
+                                                        ✓ Guardar Salario Mínimo
+                                                    </button>
+                                                    <p className="text-xs text-gray-600 mt-2">
+                                                        Este valor se guardará hasta que se suba una nueva versión
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -3542,36 +4000,60 @@ Prestación de Servicio.`;
                                     </h2>
 
                                     <div className="space-y-4 mb-6">
-                                        <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                                            <span className="text-gray-700 font-semibold">Monto solicitado:</span>
-                                            <span className="text-xl font-bold text-blue-900">
-                                                ${resultadoCaja.montoSolicitado.toLocaleString('es-AR')}
-                                            </span>
-                                        </div>
-
-                                        {resultadoCaja.saldosCancelados > 0 && (
-                                            <>
-                                                <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg">
-                                                    <span className="text-gray-700 font-semibold">Saldos cancelados:</span>
-                                                    <span className="text-xl font-bold text-purple-600">
+                                        {/* Desglose del Monto Líquido */}
+                                        <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
+                                            <h3 className="text-lg font-bold text-blue-900 mb-3">💰 Desglose del Monto Líquido</h3>
+                                            
+                                            <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                                <span className="text-gray-700 font-semibold">(+) Monto Solicitado:</span>
+                                                <span className="text-lg font-bold text-blue-900">
+                                                    ${resultadoCaja.montoSolicitado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* PRIMERO: Intereses por Diferimiento (se calculan sobre el monto solicitado) */}
+                                            <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                                <span className="text-gray-700 font-semibold">(-) Intereses por Diferimiento ({resultadoCaja.diasInteresesDiferidos} días):</span>
+                                                <span className="text-lg font-bold text-red-600">
+                                                    -${resultadoCaja.interesesDiferidos.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* SEGUNDO: Cancelación de Ayudas */}
+                                            {resultadoCaja.saldosCancelados > 0 && (
+                                                <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                                    <span className="text-gray-700 font-semibold">(-) Cancelación de Ayudas:</span>
+                                                    <span className="text-lg font-bold text-red-600">
                                                         -${resultadoCaja.saldosCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                                     </span>
                                                 </div>
+                                            )}
+                                            
+                                            <div className="flex justify-between items-center py-3 mt-2">
+                                                <span className="text-gray-800 font-bold text-lg">(=) Monto Líquido a Recibir:</span>
+                                                <span className="text-2xl font-bold text-green-700">
+                                                    ${(resultadoCaja.montoSolicitado - (resultadoCaja.interesesDiferidos || 0) - (resultadoCaja.saldosCancelados || 0)).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                </span>
+                                            </div>
+                                            
+                                            <p className="text-xs text-gray-600 mt-2">
+                                                Plan: {resultadoCaja.mesesDiferimiento === 3 ? 'Diferido 3 meses' : 'Inmediato'} | Fecha del 1er vencimiento: {new Date(resultadoCaja.fechaPrimerVencimiento).toLocaleDateString('es-AR')}
+                                            </p>
+                                        </div>
 
-                                                <div className="flex justify-between items-center p-4 bg-indigo-50 rounded-lg border-2 border-indigo-300">
-                                                    <span className="text-gray-700 font-semibold">Monto efectivo:</span>
-                                                    <span className="text-xl font-bold text-indigo-900">
-                                                        ${resultadoCaja.montoAjustado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                                    </span>
-                                                </div>
-                                            </>
-                                        )}
+                                        {/* Información del Plan */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-4 bg-orange-50 rounded-lg text-center">
+                                                <span className="text-gray-700 font-semibold block mb-1">Cantidad de cuotas:</span>
+                                                <span className="text-xl font-bold text-orange-600">
+                                                    {resultadoCaja.numeroCuotas}
+                                                </span>
+                                            </div>
 
-                                        <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
-                                            <span className="text-gray-700 font-semibold">Cantidad de cuotas:</span>
-                                            <span className="text-xl font-bold text-orange-600">
-                                                {resultadoCaja.numeroCuotas} cuotas
-                                            </span>
+                                            <div className="p-4 bg-blue-50 rounded-lg text-center">
+                                                <span className="text-gray-700 font-semibold block mb-1">TNA:</span>
+                                                <span className="text-xl font-bold text-blue-800">{TNA}%</span>
+                                            </div>
                                         </div>
 
                                         <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg border-2 border-green-300">
@@ -3580,17 +4062,12 @@ Prestación de Servicio.`;
                                                 ${resultadoCaja.cuotaMensual.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                             </span>
                                         </div>
-
-                                        <div className="p-4 bg-blue-100 rounded-lg text-center">
-                                            <span className="text-gray-700 font-semibold">TNA: </span>
-                                            <span className="text-xl font-bold text-blue-800">{TNA}%</span>
-                                        </div>
                                     </div>
 
                                     {/* Mensaje aclaratorio en rojo */}
                                     <div className="mb-6">
                                         <p className="text-sm text-red-600 text-center">
-                                            El presente cálculo no incluye intereses a descontar hasta el inicio de la amortización ni primas de subsidio de vida.
+                                            El presente cálculo no incluye primas de subsidio de vida.
                                         </p>
                                     </div>
 
@@ -3618,58 +4095,15 @@ Prestación de Servicio.`;
                                                 setResultadoCaja(null);
                                                 setErrorCaja('');
                                                 setCuotas('72');
+                                                setMesesDiferimientoCaja(0);
                                                 setModificarCuotaSocial(false);
-                                                setCuotaSocialPersonalizada('20070');
+                                                setCuotaSocialPersonalizada('20470');
                                                 setCuotaSocialEditadaManualmente(false);
                                             }}
                                             className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                         >
                                             🔄 Reiniciar cálculo
                                         </button>
-                                    </div>
-
-                                    {/* Texto informativo */}
-                                    <div className="p-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                                        <p className="text-gray-800 font-semibold mb-3">
-                                            <span className="text-yellow-600">⚠️</span> Importante: Esta simulación es orientativa.
-                                        </p>
-                                        <p className="text-gray-700 mb-3">
-                                            Para solicitar tu ayuda económica, acercate a nuestra Casa Central en <strong>Av. Córdoba 1674, C.A.B.A.</strong> o a cualquiera de nuestras filiales.
-                                        </p>
-                                        <a 
-                                            href="https://www.smsv.com.ar/filiales" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all mb-3"
-                                        >
-                                            🏢 Listado de Filiales
-                                        </a>
-                                        <p className="text-gray-700 mb-2">
-                                            <strong>Horario:</strong> lunes a viernes de 7:45 a 13 hs.
-                                        </p>
-                                        <p className="text-gray-700 mb-3">
-                                            ¿Estás lejos de una filial? Contactate con algunos de nuestros representantes:
-                                        </p>
-                                        <a 
-                                            href="https://www.smsv.com.ar/representantes/" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all mb-4"
-                                        >
-                                            👥 Listado de Representantes
-                                        </a>
-                                        <p className="text-gray-700 mb-4 text-center">
-                                            ¿Querés saber los requisitos para acceder a tu ayuda económica?<br />
-                                            Presiona el siguiente botón:
-                                        </p>
-                                        <a 
-                                            href="https://www.smsv.com.ar/ayudas-economicas/personales-en-pesos/#caracteristicas" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all"
-                                        >
-                                            📋 Características y Requisitos
-                                        </a>
                                     </div>
                                 </div>
                             )}
@@ -3687,16 +4121,7 @@ Prestación de Servicio.`;
             // Pantalla principal (Socios con Cert. de Haberes)
             return (
                 <div className="container mx-auto px-4 py-8 max-w-2xl">
-                    {/* Logo */}
-                    <div className="flex justify-center mb-4">
-                        <img 
-                            src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-                            alt="Logo SMSV" 
-                            className="h-24 object-contain"
-                        />
-                    </div>
-
-                    {/* Botón Volver, Título y Botón de Ayuda */}
+                    {/* Botón Volver y Título */}
                     <div className="flex items-center justify-between mb-6 gap-2">
                         <button
                             onClick={() => {
@@ -3715,16 +4140,6 @@ Prestación de Servicio.`;
                         <h1 className="text-xl font-bold text-gray-800 text-center flex-grow">
                             {canalPagoCajaPolicial === 'haberes' ? 'Caja Policial - Haberes' : 'En Actividad'}
                         </h1>
-                        
-                        {canalPagoCajaPolicial !== 'haberes' && (
-                            <button
-                                onClick={() => setPantalla('ayudaEnActividad')}
-                                className="bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg transition-all flex-shrink-0"
-                                title="Ayuda"
-                            >
-                                <span className="text-lg font-bold">?</span>
-                            </button>
-                        )}
                     </div>
 
                     {/* Botón Central de Deudores BCRA */}
@@ -3883,6 +4298,48 @@ Prestación de Servicio.`;
                             </div>
                         )}
 
+                        {/* Campo Haber Neto - Solo para En Actividad */}
+                        {canalPagoCajaPolicial !== 'haberes' && (
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                    💰 Ingrese su Haber Neto
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={haberNetoActividad}
+                                        onChange={(e) => {
+                                            let valor = e.target.value;
+                                            // Permitir números, punto y coma
+                                            valor = valor.replace(/[^0-9.,]/g, '');
+                                            // Reemplazar coma por punto para procesamiento interno
+                                            valor = valor.replace(/,/g, '.');
+                                            // Permitir solo un punto decimal
+                                            const partes = valor.split('.');
+                                            if (partes.length > 2) {
+                                                valor = partes[0] + '.' + partes.slice(1).join('');
+                                            }
+                                            // Limitar a 2 decimales
+                                            if (partes.length === 2 && partes[1].length > 2) {
+                                                valor = partes[0] + '.' + partes[1].substring(0, 2);
+                                            }
+                                            // Mostrar con coma como separador decimal
+                                            setHaberNetoActividad(valor.replace(/\./g, ','));
+                                        }}
+                                        placeholder="0"
+                                        className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                {haberNetoActividad && (
+                                    <p className="text-sm text-blue-600 mt-2 font-semibold">
+                                        Monto de Afectación de Haberes: ${calcularMontoAfectacionDeActividad().toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         <div className="mb-6">
                             <label className="block text-gray-700 text-lg font-semibold mb-3">
                                 📄 Indique Monto de Afectación
@@ -3927,9 +4384,6 @@ Prestación de Servicio.`;
                                                 setEsSocioNuevoHaberes(true);
                                             } else {
                                                 setEsSocioNuevo(true);
-                                            }
-                                            if (!cuotaSocialEditadaManualmente) {
-                                                buscarCuotaSocialVigente();
                                             }
                                         }}
                                         className={`py-1 px-4 rounded-lg font-semibold text-sm transition-all ${
@@ -3979,11 +4433,6 @@ Prestación de Servicio.`;
                                         {modificarCuotaSocial ? '✓ Aplicar' : '✏️ Modificar'}
                                     </button>
                                 </div>
-                                {!modificarCuotaSocial && (
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        {buscandoCuotaSocial ? '🔄 Actualizando cuota vigente...' : '✓ Cuota actualizada automáticamente desde www.smsv.com.ar'}
-                                    </p>
-                                )}
                                 {modificarCuotaSocial && (
                                     <div className="mt-2">
                                         <input
@@ -3998,9 +4447,6 @@ Prestación de Servicio.`;
                                             placeholder="Ingrese monto de cuota social"
                                             className="w-full px-3 py-2 text-sm border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
                                         />
-                                        {buscandoCuotaSocial && (
-                                            <p className="text-xs text-blue-600 mt-1">🔄 Buscando cuota vigente...</p>
-                                        )}
                                     </div>
                                 )}
                             </div>
@@ -4044,7 +4490,7 @@ Prestación de Servicio.`;
                             <div className="mb-6">
                                 <div className="flex justify-between items-center mb-3">
                                     <label className="block text-gray-700 text-lg font-semibold">
-                                        💳 Cuotas de Ayuda Económica
+                                        💳 Ayudas Económicas Vigentes
                                     </label>
                                 </div>
                                 
@@ -4053,7 +4499,7 @@ Prestación de Servicio.`;
                                 </p>
                                 
                                 <div className="space-y-3">
-                                    {cuotasAyudaEconomicaHaberes.map((cuota, index) => (
+                                    {(canalPagoCajaPolicial === 'haberes' ? cuotasAyudaEconomicaHaberes : cuotasAyudaEconomicaEnActividad).map((cuota, index) => (
                                         <div key={cuota.id} className="space-y-1">
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">$</span>
@@ -4063,7 +4509,11 @@ Prestación de Servicio.`;
                                                     value={cuota.saldoAyuda}
                                                     onChange={(e) => {
                                                         const valorFormateado = formatearNumeroDecimal(e.target.value);
-                                                        actualizarSaldoCuotaHaberes(cuota.id, valorFormateado);
+                                                        if (canalPagoCajaPolicial === 'haberes') {
+                                                            actualizarSaldoCuotaHaberes(cuota.id, valorFormateado);
+                                                        } else {
+                                                            actualizarSaldoCuotaEnActividad(cuota.id, valorFormateado);
+                                                        }
                                                     }}
                                                     placeholder={`Saldo AE ${index + 1}`}
                                                     className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-200 rounded-lg focus:border-gray-400 focus:outline-none bg-gray-50 text-gray-600"
@@ -4078,7 +4528,11 @@ Prestación de Servicio.`;
                                                         value={cuota.monto}
                                                         onChange={(e) => {
                                                             const valorFormateado = formatearNumeroDecimal(e.target.value);
-                                                            actualizarCuotaAyudaHaberes(cuota.id, valorFormateado);
+                                                            if (canalPagoCajaPolicial === 'haberes') {
+                                                                actualizarCuotaAyudaHaberes(cuota.id, valorFormateado);
+                                                            } else {
+                                                                actualizarCuotaAyudaEnActividad(cuota.id, valorFormateado);
+                                                            }
                                                         }}
                                                         placeholder={`Cuota ${index + 1}`}
                                                         className="w-full pl-10 pr-4 py-3 text-lg border-2 border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none"
@@ -4098,7 +4552,13 @@ Prestación de Servicio.`;
                                                     </button>
                                                 )}
                                                 <button
-                                                    onClick={() => toggleCancelacionCuotaHaberes(cuota.id)}
+                                                    onClick={() => {
+                                                        if (canalPagoCajaPolicial === 'haberes') {
+                                                            toggleCancelacionCuotaHaberes(cuota.id);
+                                                        } else {
+                                                            toggleCancelacionCuotaEnActividad(cuota.id);
+                                                        }
+                                                    }}
                                                     className={`font-bold py-3 px-4 rounded-lg transition-all ${
                                                         cuota.seCancela 
                                                             ? 'bg-orange-500 hover:bg-orange-600 text-white' 
@@ -4108,9 +4568,15 @@ Prestación de Servicio.`;
                                                 >
                                                     C
                                                 </button>
-                                                {cuotasAyudaEconomicaHaberes.length > 1 && (
+                                                {(canalPagoCajaPolicial === 'haberes' ? cuotasAyudaEconomicaHaberes : cuotasAyudaEconomicaEnActividad).length > 1 && (
                                                     <button
-                                                        onClick={() => eliminarCuotaAyudaHaberes(cuota.id)}
+                                                        onClick={() => {
+                                                            if (canalPagoCajaPolicial === 'haberes') {
+                                                                eliminarCuotaAyudaHaberes(cuota.id);
+                                                            } else {
+                                                                eliminarCuotaAyudaEnActividad(cuota.id);
+                                                            }
+                                                        }}
                                                         className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-all"
                                                     >
                                                         ✕
@@ -4122,7 +4588,13 @@ Prestación de Servicio.`;
                                 </div>
                                 
                                 <button
-                                    onClick={agregarCuotaAyudaHaberes}
+                                    onClick={() => {
+                                        if (canalPagoCajaPolicial === 'haberes') {
+                                            agregarCuotaAyudaHaberes();
+                                        } else {
+                                            agregarCuotaAyudaEnActividad();
+                                        }
+                                    }}
                                     className="mt-3 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
                                 >
                                     ➕ Agregar Cuota
@@ -4131,6 +4603,27 @@ Prestación de Servicio.`;
                         )}
 
                         <div className="mb-6">
+                            {/* Mostrar Monto Disponible Unificado - En Actividad y Caja Policial Haberes */}
+                            {(canalPagoCajaPolicial !== 'haberes' ? montoAfectacion : montoAfectacionHaberes) && (() => {
+                                const disponible = canalPagoCajaPolicial === 'haberes' 
+                                    ? calcularMontoMaximoDisponibleHaberes()
+                                    : calcularMontoMaximoDisponibleActividad();
+                                
+                                // Solo mostrar si hay un monto disponible calculado
+                                if (disponible.disponibleFinal > 0) {
+                                    return (
+                                        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-400">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-sm font-semibold text-gray-700">💼 Monto Disponible:</span>
+                                                <span className="text-2xl font-bold text-blue-700">
+                                                    ${disponible.disponibleFinal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
                             <label className="block text-gray-700 text-lg font-semibold mb-3 whitespace-nowrap">
                                 💰 Indique Monto de Ayuda Económica
                             </label>
@@ -4145,26 +4638,79 @@ Prestación de Servicio.`;
                                     className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
                                 />
                             </div>
-                            <p className="text-sm text-gray-500 mt-2">
-                                {((canalPagoCajaPolicial === 'haberes' ? montoAfectacionHaberes : montoAfectacion) && parseFloat((canalPagoCajaPolicial === 'haberes' ? montoAfectacionHaberes : montoAfectacion).replace(/\./g, '')) > 0) ? (
-                                    <span className="font-semibold text-blue-600">
-                                        Monto máximo disponible: ${
-                                            canalPagoCajaPolicial === 'haberes' 
-                                                ? calcularMontoMaximoDisponibleHaberes().toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})
-                                                : montoMaximo.toLocaleString('es-AR')
-                                        }
-                                    </span>
-                                ) : (
-                                    <span>
-                                        {cargandoMontoMaximo ? (
-                                            <>🔄 Obteniendo monto máximo...</>
-                                        ) : (
-                                            <>Monto Máximo que otorga SMSV: ${(montoMaximoSMSV || MONTO_MAXIMO_ABSOLUTO).toLocaleString('es-AR')}</>
-                                        )}
-                                    </span>
-                                )}
-                            </p>
                         </div>
+
+                        {/* Campo Fecha de Pago */}
+                        {(canalPagoCajaPolicial === 'haberes' ? montoHaberes : monto) && (
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                    📅 Fecha de Pago
+                                </label>
+                                <input
+                                    type="date"
+                                    value={canalPagoCajaPolicial === 'haberes' ? fechaPagoHaberes : fechaPagoActividad}
+                                    onChange={(e) => {
+                                        if (canalPagoCajaPolicial === 'haberes') {
+                                            setFechaPagoHaberes(e.target.value);
+                                        } else {
+                                            setFechaPagoActividad(e.target.value);
+                                        }
+                                    }}
+                                    className="w-full px-4 py-3 text-lg border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Fecha de corte: {FECHA_CORTE}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Plan de Diferimiento */}
+                        {(canalPagoCajaPolicial === 'haberes' ? montoHaberes : monto) && (
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-lg font-semibold mb-3">
+                                    📆 Plan de Diferimiento
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => {
+                                            if (canalPagoCajaPolicial === 'haberes') {
+                                                setMesesDiferimientoHaberes(0);
+                                            } else {
+                                                setMesesDiferimientoActividad(0);
+                                            }
+                                        }}
+                                        className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                                            (canalPagoCajaPolicial === 'haberes' ? mesesDiferimientoHaberes : mesesDiferimientoActividad) === 0
+                                                ? 'bg-green-600 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        Sin Diferimiento
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (canalPagoCajaPolicial === 'haberes') {
+                                                setMesesDiferimientoHaberes(3);
+                                            } else {
+                                                setMesesDiferimientoActividad(3);
+                                            }
+                                        }}
+                                        className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                                            (canalPagoCajaPolicial === 'haberes' ? mesesDiferimientoHaberes : mesesDiferimientoActividad) === 3
+                                                ? 'bg-orange-600 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        Diferido 3 Meses
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-2">
+                                    {(canalPagoCajaPolicial === 'haberes' ? mesesDiferimientoHaberes : mesesDiferimientoActividad) === 0 
+                                        ? 'Inicio de amortización el mes siguiente al otorgamiento' 
+                                        : 'Inicio de amortización 3 meses después del otorgamiento. Se cobrarán intereses anticipados.'}
+                                </p>
+                            </div>
+                        )}
 
                         <div className="mb-6">
                             <label className="block text-gray-700 text-lg font-semibold mb-3">
@@ -4250,6 +4796,61 @@ Prestación de Servicio.`;
                         >
                             🧮 Calcular
                         </button>
+                        
+                        {/* Salario Mínimo Vital y Móvil */}
+                        <div className="mt-3 text-center">
+                            <p className="text-xs text-black">
+                                {salarioMinimo ? (
+                                    `Salario Mínimo Vital y Móvil: $${salarioMinimo.toLocaleString('es-AR')}`
+                                ) : (
+                                    'Salario Mínimo: No disponible'
+                                )}
+                            </p>
+                            <button
+                                onClick={() => {
+                                    setModificarSalarioMinimo(!modificarSalarioMinimo);
+                                    if (!modificarSalarioMinimo) {
+                                        setSalarioMinimoPersonalizado(salarioMinimo?.toString() || SALARIO_MINIMO_DEFAULT.toString());
+                                    }
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+                            >
+                                {modificarSalarioMinimo ? '✖ Cancelar edición' : '✏️ Editar manualmente'}
+                            </button>
+                            
+                            {modificarSalarioMinimo && (
+                                <div className="mt-3 bg-blue-50 p-3 rounded-lg">
+                                    <input
+                                        type="number"
+                                        step="1"
+                                        value={salarioMinimoPersonalizado}
+                                        onChange={(e) => setSalarioMinimoPersonalizado(e.target.value)}
+                                        className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none text-center"
+                                        placeholder="Ingrese el salario mínimo"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const nuevoSalario = parseFloat(salarioMinimoPersonalizado);
+                                            if (!isNaN(nuevoSalario) && nuevoSalario > 0) {
+                                                setSalarioMinimo(nuevoSalario);
+                                                setSalarioMinimoEditadoManualmente(true);
+                                                localStorage.setItem('salarioMinimoPersonalizado', salarioMinimoPersonalizado);
+                                                localStorage.setItem('salarioMinimoEditadoManualmente', 'true');
+                                                setModificarSalarioMinimo(false);
+                                            } else {
+                                                alert('Por favor ingrese un valor válido');
+                                            }
+                                        }}
+                                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                    >
+                                        ✓ Guardar Salario Mínimo
+                                    </button>
+                                    <p className="text-xs text-gray-600 mt-2">
+                                        Este valor se guardará hasta que se suba una nueva versión
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Resultados */}
@@ -4262,36 +4863,60 @@ Prestación de Servicio.`;
                             </h2>
 
                             <div className="space-y-4 mb-6">
-                                <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                                    <span className="text-gray-700 font-semibold">Monto solicitado:</span>
-                                    <span className="text-xl font-bold text-blue-900">
-                                        ${resultadoActual.montoSolicitado.toLocaleString('es-AR')}
-                                    </span>
-                                </div>
-
-                                {resultadoActual.saldosCancelados > 0 && (
-                                    <>
-                                        <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg">
-                                            <span className="text-gray-700 font-semibold">Saldos cancelados:</span>
-                                            <span className="text-xl font-bold text-purple-600">
+                                {/* Desglose del Monto Líquido */}
+                                <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
+                                    <h3 className="text-lg font-bold text-blue-900 mb-3">💰 Desglose del Monto Líquido</h3>
+                                    
+                                    <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                        <span className="text-gray-700 font-semibold">(+) Monto Solicitado:</span>
+                                        <span className="text-lg font-bold text-blue-900">
+                                            ${resultadoActual.montoSolicitado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* PRIMERO: Intereses por Diferimiento (se calculan sobre el monto solicitado) */}
+                                    <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                        <span className="text-gray-700 font-semibold">(-) Intereses por Diferimiento ({resultadoActual.diasInteresesDiferidos} días):</span>
+                                        <span className="text-lg font-bold text-red-600">
+                                            -${resultadoActual.interesesDiferidos.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* SEGUNDO: Cancelación de Ayudas */}
+                                    {resultadoActual.saldosCancelados > 0 && (
+                                        <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                                            <span className="text-gray-700 font-semibold">(-) Cancelación de Ayudas:</span>
+                                            <span className="text-lg font-bold text-red-600">
                                                 -${resultadoActual.saldosCancelados.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                             </span>
                                         </div>
+                                    )}
+                                    
+                                    <div className="flex justify-between items-center py-3 mt-2">
+                                        <span className="text-gray-800 font-bold text-lg">(=) Monto Líquido a Recibir:</span>
+                                        <span className="text-2xl font-bold text-green-700">
+                                            ${(resultadoActual.montoSolicitado - (resultadoActual.interesesDiferidos || 0) - (resultadoActual.saldosCancelados || 0)).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                        </span>
+                                    </div>
+                                    
+                                    <p className="text-xs text-gray-600 mt-2">
+                                        Plan: {resultadoActual.mesesDiferimiento === 3 ? 'Diferido 3 meses' : 'Inmediato'} | Fecha del 1er vencimiento: {new Date(resultadoActual.fechaPrimerVencimiento).toLocaleDateString('es-AR')}
+                                    </p>
+                                </div>
 
-                                        <div className="flex justify-between items-center p-4 bg-indigo-50 rounded-lg border-2 border-indigo-300">
-                                            <span className="text-gray-700 font-semibold">Monto efectivo:</span>
-                                            <span className="text-xl font-bold text-indigo-900">
-                                                ${resultadoActual.montoAjustado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
+                                {/* Información del Plan */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 bg-orange-50 rounded-lg text-center">
+                                        <span className="text-gray-700 font-semibold block mb-1">Cantidad de cuotas:</span>
+                                        <span className="text-xl font-bold text-orange-600">
+                                            {resultadoActual.numeroCuotas}
+                                        </span>
+                                    </div>
 
-                                <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
-                                    <span className="text-gray-700 font-semibold">Cantidad de cuotas:</span>
-                                    <span className="text-xl font-bold text-orange-600">
-                                        {resultadoActual.numeroCuotas} cuotas
-                                    </span>
+                                    <div className="p-4 bg-blue-50 rounded-lg text-center">
+                                        <span className="text-gray-700 font-semibold block mb-1">TNA:</span>
+                                        <span className="text-xl font-bold text-blue-800">{TNA}%</span>
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg border-2 border-green-300">
@@ -4299,11 +4924,6 @@ Prestación de Servicio.`;
                                     <span className="text-2xl font-bold text-green-600">
                                         ${resultadoActual.cuotaMensual.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                     </span>
-                                </div>
-
-                                <div className="p-4 bg-blue-100 rounded-lg text-center">
-                                    <span className="text-gray-700 font-semibold">TNA: </span>
-                                    <span className="text-xl font-bold text-blue-800">{TNA}%</span>
                                 </div>
                             </div>
 
@@ -4329,64 +4949,51 @@ Prestación de Servicio.`;
                                     🔄 Reiniciar cálculo
                                 </button>
                             </div>
-
-                            {/* Texto informativo */}
-                            <div className="p-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                                <p className="text-gray-800 font-semibold mb-3">
-                                    <span className="text-yellow-600">⚠️</span> Importante: Esta simulación es orientativa.
-                                </p>
-                                <p className="text-gray-700 mb-3">
-                                    Para solicitar tu ayuda económica, acercate a nuestra Casa Central en <strong>Av. Córdoba 1674, C.A.B.A.</strong> o a cualquiera de nuestras filiales.
-                                </p>
-                                <a 
-                                    href="https://www.smsv.com.ar/filiales" 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all mb-3"
-                                >
-                                    🏢 Listado de Filiales
-                                </a>
-                                <p className="text-gray-700 mb-2">
-                                    <strong>Horario:</strong> lunes a viernes de 7:45 a 13 hs.
-                                </p>
-                                <p className="text-gray-700 mb-3">
-                                    ¿Estás lejos de una filial? Contactate con algunos de nuestros representantes:
-                                </p>
-                                <a 
-                                    href="https://www.smsv.com.ar/representantes/" 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all mb-4"
-                                >
-                                    👥 Listado de Representantes
-                                </a>
-                                <p className="text-gray-700 mb-4 text-center">
-                                    ¿Querés saber los requisitos para acceder a tu ayuda económica?<br />
-                                    Presiona el siguiente botón:
-                                </p>
-                                <a 
-                                    href="https://www.smsv.com.ar/ayudas-economicas/personales-en-pesos/#caracteristicas" 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="block w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-4 rounded-lg text-center transition-all"
-                                >
-                                    📋 Características y Requisitos
-                                </a>
-                            </div>
                         </div>
                         );
                     })()}
 
                     {/* Footer */}
-                    <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                    <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
                 </div>
             );
         }
 
         ReactDOM.render(<App />, document.getElementById('root'));
+        
+        // Ocultar pantalla de carga cuando React esté listo
+        setTimeout(() => {
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+                loadingScreen.style.opacity = '0';
+                loadingScreen.style.transition = 'opacity 0.3s ease-out';
+                setTimeout(() => {
+                    loadingScreen.style.display = 'none';
+                }, 300);
+            }
+        }, 100);
     </script>
 
     <style>
+        /* Animaciones para pantalla de carga */
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+
         @keyframes fade-in {
             from {
                 opacity: 0;
