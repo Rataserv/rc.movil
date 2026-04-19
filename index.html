@@ -132,6 +132,11 @@
             const [resultadoBCRA, setResultadoBCRA] = useState(null);
             const [errorBCRA, setErrorBCRA] = useState('');
             
+            // Estados para carga manual BCRA
+            const [mostrarCargaManual, setMostrarCargaManual] = useState(false);
+            const [textoCargaManual, setTextoCargaManual] = useState('');
+            const [errorCargaManual, setErrorCargaManual] = useState('');
+            
             // Estados para pantalla retirado
             const [haberNeto, setHaberNeto] = useState('');
             const [esPoderdante, setEsPoderdante] = useState(false);
@@ -156,6 +161,11 @@
                 { id: 2, monto: '', saldoAyuda: '', seCancela: false, tasaCancelacion: '' },
                 { id: 3, monto: '', saldoAyuda: '', seCancela: false, tasaCancelacion: '' }
             ]);
+            
+            // Estados para calculadora de monto de afectación
+            const [mostrarCalculadora, setMostrarCalculadora] = useState(false);
+            const [displayCalculadora, setDisplayCalculadora] = useState('');
+            const [operacionCalculadora, setOperacionCalculadora] = useState('');
             
             // Estados para cuotas de ayuda económica de Caja Policial
             const [cuotasAyudaEconomicaCaja, setCuotasAyudaEconomicaCaja] = useState([
@@ -454,7 +464,18 @@
                     const data = await response.json();
 
                     if (data.status === 200) {
-                        setResultadoBCRA(data.results);
+                        // Multiplicar los montos por 1000 ya que la API devuelve en miles
+                        const resultadoProcesado = {
+                            ...data.results,
+                            periodos: data.results.periodos.map(periodo => ({
+                                ...periodo,
+                                entidades: periodo.entidades.map(entidad => ({
+                                    ...entidad,
+                                    monto: entidad.monto * 1000
+                                }))
+                            }))
+                        };
+                        setResultadoBCRA(resultadoProcesado);
                     } else if (data.status === 404) {
                         setErrorBCRA('No se encontraron datos para el CUIL ingresado');
                     } else if (data.errorMessages && data.errorMessages.length > 0) {
@@ -470,6 +491,93 @@
                 }
             };
 
+            // Función para procesar texto pegado de Central de Deudores BCRA
+            const procesarCargaManual = () => {
+                setErrorCargaManual('');
+                setErrorBCRA('');
+                setResultadoBCRA(null);
+
+                if (!textoCargaManual.trim()) {
+                    setErrorCargaManual('Por favor, pegue el texto de la Central de Deudores del BCRA');
+                    return;
+                }
+
+                try {
+                    // Extraer el CUIL/CUIT del texto (primer grupo de 11 dígitos) - OPCIONAL
+                    const cuilMatch = textoCargaManual.match(/\b\d{11}\b/);
+                    const cuilEncontrado = cuilMatch ? cuilMatch[0] : '';
+
+                    // Extraer el nombre (texto antes del primer banco/entidad)
+                    const nombreMatch = textoCargaManual.match(/^([A-ZÁÉÍÓÚÑ\s]+)(?=BANCO|MERCADOLIBRE|NARANJA|CREDITOS|TARJETA|BBVA|SANTANDER|GALICIA|HSBC|MACRO|NACION|PATAGONIA|ICBC|SUPERVIELLE|CIUDAD|PROVINCIA|BIND|CREDICOOP|BAPRO|COMAFI)/);
+                    const nombreEncontrado = nombreMatch ? nombreMatch[1].trim() : 'PERSONA FÍSICA';
+
+                    // Regex para identificar cada deuda
+                    // Formato: [NOMBRE][ENTIDAD][PERIODO MM/AA][SITUACION 1-6][MONTO][N/A o número][-]
+                    const regexDeuda = /([A-ZÁÉÍÓÚÑ\s.]+?)(BANCO[A-ZÁÉÍÓÚÑ\s.]+|MERCADOLIBRE[A-ZÁÉÍÓÚÑ\s.]+|NARANJA[A-ZÁÉÍÓÚÑ\s.]+|CREDITOS[A-ZÁÉÍÓÚÑ\s.]+|TARJETA[A-ZÁÉÍÓÚÑ\s.]+|[A-ZÁÉÍÓÚÑ]+\sS\.R\.L\.|[A-ZÁÉÍÓÚÑ]+\sS\.A\.)\s*(\d{2}\/\d{2})\s*(\d)\s*([\d.]+)\s*(N\/A|\d+)\s*-/g;
+
+                    const deudas = [];
+                    let match;
+
+                    while ((match = regexDeuda.exec(textoCargaManual)) !== null) {
+                        const entidad = match[2].trim();
+                        const periodo = match[3]; // MM/AA
+                        const situacion = parseInt(match[4]);
+                        const montoTexto = match[5].replace(/\./g, ''); // Eliminar puntos de miles
+                        const monto = parseFloat(montoTexto);
+
+                        // Convertir periodo MM/AA a formato AAAAMM
+                        const [mes, anio] = periodo.split('/');
+                        const periodoFormateado = parseInt(`20${anio}${mes}`);
+
+                        deudas.push({
+                            entidad: entidad,
+                            situacion: situacion,
+                            monto: monto * 1000, // Multiplicar por 1000 el monto pegado
+                            diasAtrasoPago: 0
+                        });
+                    }
+
+                    if (deudas.length === 0) {
+                        setErrorCargaManual('No se pudieron identificar deudas en el texto pegado. Asegúrese de copiar el texto directamente desde la web del BCRA.');
+                        return;
+                    }
+
+                    // Agrupar por el periodo más reciente
+                    const periodoMasReciente = textoCargaManual.match(/\d{2}\/\d{2}/);
+                    if (!periodoMasReciente) {
+                        setErrorCargaManual('No se pudo identificar el periodo en el texto');
+                        return;
+                    }
+
+                    const [mes, anio] = periodoMasReciente[0].split('/');
+                    const periodoNumerico = parseInt(`20${anio}${mes}`);
+
+                    // Crear objeto de resultado compatible con la API del BCRA
+                    const resultadoManual = {
+                        identificacion: cuilEncontrado,
+                        denominacion: nombreEncontrado,
+                        periodos: [
+                            {
+                                periodo: periodoNumerico,
+                                entidades: deudas
+                            }
+                        ]
+                    };
+
+                    // Establecer el resultado
+                    setResultadoBCRA(resultadoManual);
+                    if (cuilEncontrado) {
+                        setCuil(formatearCUIL(cuilEncontrado));
+                    }
+                    setTextoCargaManual('');
+                    setMostrarCargaManual(false);
+
+                } catch (error) {
+                    console.error('Error al procesar texto:', error);
+                    setErrorCargaManual('Error al procesar el texto. Asegúrese de copiar el formato correcto desde la web del BCRA.');
+                }
+            };
+
             // Función para obtener el nombre de la situación
             const obtenerNombreSituacion = (codigo) => {
                 const situaciones = {
@@ -478,6 +586,22 @@
                     3: 'Irrecuperable'
                 };
                 return situaciones[codigo] || 'Desconocido';
+            };
+
+            // Función para calcular la suma de montos en situación 3, 4 y 5
+            const calcularSumaSituaciones345 = (resultadoBCRA) => {
+                if (!resultadoBCRA || !resultadoBCRA.periodos || resultadoBCRA.periodos.length === 0) {
+                    return 0;
+                }
+                
+                const suma = resultadoBCRA.periodos[0].entidades.reduce((total, entidad) => {
+                    if (entidad.situacion === 3 || entidad.situacion === 4 || entidad.situacion === 5) {
+                        return total + (entidad.monto || 0);
+                    }
+                    return total;
+                }, 0);
+                
+                return suma;
             };
 
             // Función para formatear el período de AAAAMM a MM/AAAA
@@ -748,12 +872,12 @@
                     return total;
                 }, 0);
                 
-                // Restar los saldos cancelados al monto solicitado
-                const montoSolicitadoReal = montoAyudaNumerico - totalSaldosCancelados;
+                // Calcular el monto neto a entregar (lo que recibe en mano)
+                const montoNetoAEntregar = montoAyudaNumerico - totalSaldosCancelados;
                 
                 const montoAfectacionCalculado = calcularPorcentajeHaber();
 
-                if (montoSolicitadoReal <= 0) {
+                if (montoNetoAEntregar <= 0) {
                     setErrorRetirado('El monto de ayuda económica debe ser mayor a cero después de restar los saldos cancelados');
                     return;
                 }
@@ -781,8 +905,9 @@
                 const tasaMensual = (TNA / 100) / 12;
                 const numeroCuotas = parseInt(cuotas);
                 
+                // CORRECCIÓN: La cuota se calcula sobre el MONTO TOTAL SOLICITADO
                 // Fórmula del sistema francés: C = P * [i * (1 + i)^n] / [(1 + i)^n - 1]
-                const cuotaMensual = montoSolicitadoReal * (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas)) / 
+                const cuotaMensual = montoAyudaNumerico * (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas)) / 
                                      (Math.pow(1 + tasaMensual, numeroCuotas) - 1);
                 
                 // Validar que la cuota mensual no supere el monto de afectación
@@ -811,7 +936,7 @@
                 }
                 
                 const totalAPagar = cuotaMensual * numeroCuotas;
-                const interesTotal = totalAPagar - montoSolicitadoReal;
+                const interesTotal = totalAPagar - montoAyudaNumerico;
 
                 // CORRECCIÓN: Calcular intereses diferidos sobre el MONTO SOLICITADO ORIGINAL
                 // Los intereses por diferimiento se calculan sobre el monto que el socio pidió,
@@ -826,7 +951,7 @@
 
                 setResultadoRetirado({
                     montoSolicitado: montoAyudaNumerico,
-                    montoSolicitadoReal: montoSolicitadoReal,
+                    montoNetoAEntregar: montoNetoAEntregar,
                     totalSaldosCancelados: totalSaldosCancelados,
                     cuotaMensual: cuotaMensual,
                     numeroCuotas: numeroCuotas,
@@ -1276,10 +1401,10 @@
                     return total;
                 }, 0);
                 
-                // El monto ajustado es el monto solicitado menos los saldos que se cancelan
-                const montoAjustado = montoAyudaNumerico - saldosCancelados;
+                // El monto neto a entregar es el monto solicitado menos los saldos que se cancelan
+                const montoNetoAEntregar = montoAyudaNumerico - saldosCancelados;
                 
-                if (montoAjustado <= 0) {
+                if (montoNetoAEntregar <= 0) {
                     setErrorCaja('El monto solicitado es menor o igual a los saldos que se cancelan. Por favor, ajuste el monto.');
                     return;
                 }
@@ -1287,8 +1412,9 @@
                 const tasaMensual = (TNA / 100) / 12;
                 const numeroCuotas = parseInt(cuotas);
                 
-                // Usar el monto ajustado para calcular la cuota
-                const cuotaMensual = montoAjustado * (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas)) / 
+                // CORRECCIÓN: La cuota se calcula sobre el MONTO TOTAL SOLICITADO
+                // Fórmula del sistema francés: C = P * [i * (1 + i)^n] / [(1 + i)^n - 1]
+                const cuotaMensual = montoAyudaNumerico * (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas)) / 
                                      (Math.pow(1 + tasaMensual, numeroCuotas) - 1);
                 
                 // Validar que la cuota calculada no supere el monto de afectación
@@ -1317,7 +1443,7 @@
                 }
                 
                 const totalAPagar = cuotaMensual * numeroCuotas;
-                const interesTotal = totalAPagar - montoAjustado;
+                const interesTotal = totalAPagar - montoAyudaNumerico;
 
                 // CORRECCIÓN: Calcular intereses diferidos sobre el MONTO SOLICITADO ORIGINAL
                 // Los intereses por diferimiento se calculan sobre el monto que el socio pidió,
@@ -1332,7 +1458,7 @@
 
                 setResultadoCaja({
                     montoSolicitado: montoAyudaNumerico,
-                    montoAjustado: montoAjustado,
+                    montoNetoAEntregar: montoNetoAEntregar,
                     saldosCancelados: saldosCancelados,
                     cuotaMensual: cuotaMensual,
                     numeroCuotas: numeroCuotas,
@@ -1497,10 +1623,10 @@
                     return total;
                 }, 0);
                 
-                // El monto ajustado es el monto solicitado menos los saldos que se cancelan
-                const montoAjustado = montoNumerico - saldosCancelados;
+                // El monto neto a entregar es el monto solicitado menos los saldos que se cancelan
+                const montoNetoAEntregar = montoNumerico - saldosCancelados;
                 
-                if (montoAjustado <= 0) {
+                if (montoNetoAEntregar <= 0) {
                     if (canalPagoCajaPolicial === 'haberes') {
                         setErrorHaberes('El monto solicitado es menor o igual a los saldos que se cancelan. Por favor, ajuste el monto.');
                     } else {
@@ -1568,13 +1694,14 @@
                     }
                 }
 
-                // Cálculo de la cuota usando sistema francés (usar el monto ajustado)
+                // Cálculo de la cuota usando sistema francés
                 const tasaMensual = (TNA / 100) / 12;
                 const cuotasActuales = canalPagoCajaPolicial === 'haberes' ? cuotasHaberes : cuotas;
                 const numeroCuotas = parseInt(cuotasActuales);
                 
+                // CORRECCIÓN: La cuota se calcula sobre el MONTO TOTAL SOLICITADO
                 // Fórmula del sistema francés: C = P * [i * (1 + i)^n] / [(1 + i)^n - 1]
-                const cuotaMensual = montoAjustado * (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas)) / 
+                const cuotaMensual = montoNumerico * (tasaMensual * Math.pow(1 + tasaMensual, numeroCuotas)) / 
                                      (Math.pow(1 + tasaMensual, numeroCuotas) - 1);
                 
                 // Validar que la cuota no supere el monto de afectación ajustado
@@ -1635,7 +1762,7 @@
                 }
                 
                 const totalAPagar = cuotaMensual * numeroCuotas;
-                const interesTotal = totalAPagar - montoAjustado;
+                const interesTotal = totalAPagar - montoNumerico;
 
                 // CORRECCIÓN: Calcular intereses diferidos sobre el MONTO SOLICITADO ORIGINAL
                 // Los intereses por diferimiento se calculan sobre el monto que el socio pidió,
@@ -1654,7 +1781,7 @@
                 if (canalPagoCajaPolicial === 'haberes') {
                     setResultadoHaberes({
                         montoSolicitado: montoNumerico,
-                        montoAjustado: montoAjustado,
+                        montoNetoAEntregar: montoNetoAEntregar,
                         saldosCancelados: saldosCancelados,
                         cuotaMensual: cuotaMensual,
                         numeroCuotas: numeroCuotas,
@@ -1669,7 +1796,7 @@
                 } else {
                     setResultado({
                         montoSolicitado: montoNumerico,
-                        montoAjustado: montoAjustado,
+                        montoNetoAEntregar: montoNetoAEntregar,
                         saldosCancelados: saldosCancelados,
                         cuotaMensual: cuotaMensual,
                         numeroCuotas: numeroCuotas,
@@ -1717,7 +1844,7 @@
 `;
                 
                 // Agregar información de intereses diferidos (SIEMPRE se muestran)
-                const liquidoRecibir = resultadoActual.montoAjustado - resultadoActual.interesesDiferidos;
+                const liquidoRecibir = resultadoActual.montoNetoAEntregar - resultadoActual.interesesDiferidos;
                 
                 mensaje += `💰 *Líquido a recibir aproximado:* $${liquidoRecibir.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
@@ -1739,7 +1866,7 @@
 `;
                 
                 // Agregar información de intereses diferidos (SIEMPRE se muestran)
-                const liquidoRecibir = resultadoRetirado.montoSolicitadoReal - resultadoRetirado.interesesDiferidos;
+                const liquidoRecibir = resultadoRetirado.montoNetoAEntregar - resultadoRetirado.interesesDiferidos;
                 
                 mensaje += `💰 *Líquido a recibir aproximado:* $${liquidoRecibir.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
@@ -1761,7 +1888,7 @@
 `;
                 
                 // Agregar información de intereses diferidos (SIEMPRE se muestran)
-                const liquidoRecibir = resultadoCaja.montoAjustado - resultadoCaja.interesesDiferidos;
+                const liquidoRecibir = resultadoCaja.montoNetoAEntregar - resultadoCaja.interesesDiferidos;
                 
                 mensaje += `💰 *Líquido a recibir aproximado:* $${liquidoRecibir.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
@@ -1824,12 +1951,123 @@
             };
 
             const handleMontoAfectacionChange = (e) => {
-                const valorFormateado = formatearNumeroConDecimales(e.target.value);
-                if (canalPagoCajaPolicial === 'haberes') {
-                    setMontoAfectacionHaberes(valorFormateado);
+                const valor = e.target.value;
+                
+                // Si el valor contiene un +, procesar como suma
+                if (valor.includes('+')) {
+                    // Permitir el ingreso mientras se escribe
+                    if (canalPagoCajaPolicial === 'haberes') {
+                        setMontoAfectacionHaberes(valor);
+                    } else {
+                        setMontoAfectacion(valor);
+                    }
+                    
+                    // Intentar evaluar la suma
+                    const partes = valor.split('+').map(p => p.trim());
+                    
+                    // Verificar si todas las partes son números válidos
+                    const numerosValidos = partes.every(parte => {
+                        if (parte === '') return false;
+                        // Convertir formato argentino (1.234.567,89) a número
+                        const numero = parseFloat(parte.replace(/\./g, '').replace(',', '.'));
+                        return !isNaN(numero);
+                    });
+                    
+                    // Si todas las partes son válidas, calcular la suma
+                    if (numerosValidos && partes.length > 1) {
+                        const suma = partes.reduce((total, parte) => {
+                            const numero = parseFloat(parte.replace(/\./g, '').replace(',', '.'));
+                            return total + numero;
+                        }, 0);
+                        
+                        // Formatear el resultado en formato argentino
+                        const resultado = suma.toFixed(2).replace('.', ',');
+                        
+                        // Actualizar el campo con el resultado
+                        if (canalPagoCajaPolicial === 'haberes') {
+                            setMontoAfectacionHaberes(resultado);
+                        } else {
+                            setMontoAfectacion(resultado);
+                        }
+                    }
                 } else {
-                    setMontoAfectacion(valorFormateado);
+                    // Comportamiento normal: formatear el número
+                    const valorFormateado = formatearNumeroConDecimales(valor);
+                    if (canalPagoCajaPolicial === 'haberes') {
+                        setMontoAfectacionHaberes(valorFormateado);
+                    } else {
+                        setMontoAfectacion(valorFormateado);
+                    }
                 }
+            };
+
+            // Funciones para la calculadora
+            const agregarNumeroCalculadora = (num) => {
+                setDisplayCalculadora(prev => prev + num);
+            };
+
+            const agregarOperadorCalculadora = (op) => {
+                // Solo agregar operador si hay un número en el display actual
+                if (displayCalculadora) {
+                    setOperacionCalculadora(prev => prev + displayCalculadora + op);
+                    setDisplayCalculadora('');
+                }
+            };
+
+            const calcularResultadoCalculadora = () => {
+                let expresion = operacionCalculadora + displayCalculadora;
+                
+                // Evaluar la expresión (solo suma y resta)
+                try {
+                    // Separar por operadores manteniendo los signos
+                    const partes = expresion.split(/(\+|\-)/).filter(p => p && p.trim());
+                    
+                    let resultado = 0;
+                    let operador = '+';
+                    
+                    for (let i = 0; i < partes.length; i++) {
+                        const parte = partes[i].trim();
+                        
+                        if (parte === '+' || parte === '-') {
+                            operador = parte;
+                        } else {
+                            const numero = parseFloat(parte.replace(/\./g, '').replace(',', '.'));
+                            if (!isNaN(numero)) {
+                                if (operador === '+') {
+                                    resultado += numero;
+                                } else if (operador === '-') {
+                                    resultado -= numero;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Formatear el resultado en formato argentino
+                    const resultadoFormateado = resultado.toFixed(2).replace('.', ',');
+                    
+                    // Actualizar el campo de monto de afectación
+                    if (canalPagoCajaPolicial === 'haberes') {
+                        setMontoAfectacionHaberes(resultadoFormateado);
+                    } else {
+                        setMontoAfectacion(resultadoFormateado);
+                    }
+                    
+                    // Cerrar calculadora y resetear
+                    setMostrarCalculadora(false);
+                    setDisplayCalculadora('');
+                    setOperacionCalculadora('');
+                } catch (error) {
+                    console.error('Error al calcular:', error);
+                }
+            };
+
+            const limpiarCalculadora = () => {
+                setDisplayCalculadora('');
+                setOperacionCalculadora('');
+            };
+
+            const borrarUltimoCalculadora = () => {
+                setDisplayCalculadora(prev => prev.slice(0, -1));
             };
 
             const datosTabla = generarDatosTabla();
@@ -1986,7 +2224,7 @@
 
                         {/* Título de la App */}
                         <h1 className="text-xl font-bold text-[#155E75] text-center mb-1">
-                            RC Lite
+                            RC Móvil
                         </h1>
                         <p className="text-xs text-gray-600 text-center mb-3">
                             Closed BETA
@@ -2010,13 +2248,13 @@
                                 onClick={() => setPantalla('retirado')}
                                 className="w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-3 px-6 rounded-lg text-base shadow-lg transition-all transform hover:scale-105"
                             >
-                                <span className="text-2xl">🏅</span> Socios Retirados por IAF
+                                <span className="text-2xl">🏅</span> Personal Retirado de IAF
                             </button>
                             <button
                                 onClick={() => setPantalla('cajaPolicial')}
                                 className="w-full bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold py-3 px-6 rounded-lg text-base shadow-lg transition-all transform hover:scale-105"
                             >
-                                <span className="text-2xl">🏅</span> Socios Retirados por Caja Policial
+                                <span className="text-2xl">🏅</span> Personal Retirado de Caja Policial
                             </button>
                         </div>
 
@@ -2190,7 +2428,7 @@ Prestación de Servicio.`;
                 );
             }
 
-            // Pantalla para Socios Retirados por IAF
+            // Pantalla para Personal Retirado de IAF
             if (pantalla === 'retirado') {
                 return (
                     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -2225,18 +2463,59 @@ Prestación de Servicio.`;
                                     <label className="block text-gray-700 font-semibold mb-2">
                                         Ingresar N° de CUIL
                                     </label>
-                                    <input
-                                        type="tel"
-                                        inputMode="numeric"
-                                        value={cuil}
-                                        onChange={(e) => setCuil(formatearCUIL(e.target.value))}
-                                        placeholder="XX-XXXXXXXX-X"
-                                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 text-lg"
-                                    />
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="tel"
+                                            inputMode="numeric"
+                                            value={cuil}
+                                            onChange={(e) => setCuil(formatearCUIL(e.target.value))}
+                                            placeholder="XX-XXXXXXXX-X"
+                                            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 text-lg"
+                                        />
+                                        <button
+                                            onClick={() => setMostrarCargaManual(!mostrarCargaManual)}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg transition-all flex items-center justify-center"
+                                            title="Carga manual por copiado y pegado"
+                                        >
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </button>
+                                    </div>
                                     <p className="text-xs text-gray-600 mt-1">
                                         También puede consultar situación crediticia <a href="https://www.bcra.gob.ar/situacion-crediticia/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">aquí</a>.
                                     </p>
                                 </div>
+
+                                {/* Área de carga manual */}
+                                {mostrarCargaManual && (
+                                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                                        <label className="block text-gray-700 font-semibold mb-2">
+                                            📋 Carga Manual - Pegue el texto desde BCRA
+                                        </label>
+                                        <p className="text-xs text-gray-600 mb-2">
+                                            Copie y pegue las filas completas desde la web del BCRA (incluya nombre, banco, periodo, situación y monto)
+                                        </p>
+                                        <textarea
+                                            value={textoCargaManual}
+                                            onChange={(e) => setTextoCargaManual(e.target.value)}
+                                            placeholder="Pegue aquí el texto de la Central de Deudores del BCRA"
+                                            rows="4"
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm font-mono"
+                                        />
+                                        <button
+                                            onClick={procesarCargaManual}
+                                            className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+                                        >
+                                            ✓ Procesar Texto
+                                        </button>
+                                        {errorCargaManual && (
+                                            <div className="mt-2 p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                                                <p className="text-red-700 text-sm">{errorCargaManual}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <button
                                     onClick={consultarBCRA}
@@ -2281,7 +2560,7 @@ Prestación de Servicio.`;
                                                                     entidad.situacion === 2 ? 'text-yellow-600' : 
                                                                     'text-red-600'
                                                                 }`}>
-                                                                    {entidad.situacion} - {obtenerNombreSituacion(entidad.situacion)}
+                                                                    {entidad.situacion}
                                                                 </span>
                                                             </div>
                                                             <div>
@@ -2293,7 +2572,7 @@ Prestación de Servicio.`;
                                                             <div>
                                                                 <span className="text-gray-600">Monto:</span>
                                                                 <span className="ml-2 font-bold">
-                                                                    ${(entidad.monto * 1000).toLocaleString('es-AR')}
+                                                                    ${entidad.monto.toLocaleString('es-AR')}
                                                                 </span>
                                                             </div>
                                                             {entidad.diasAtrasoPago > 0 && (
@@ -2315,6 +2594,24 @@ Prestación de Servicio.`;
                                                 </p>
                                             </div>
                                         )}
+                                        
+                                        {/* Mensaje de Informes Comerciales Negativos */}
+                                        {(() => {
+                                            const sumaSit345 = calcularSumaSituaciones345(resultadoBCRA);
+                                            const salarioMinimoActual = salarioMinimo || SALARIO_MINIMO_DEFAULT;
+                                            const limite5Salarios = salarioMinimoActual * 5;
+                                            
+                                            if (sumaSit345 > limite5Salarios) {
+                                                return (
+                                                    <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-600 rounded">
+                                                        <p className="text-red-600 font-bold text-center">
+                                                            Informes Comerciales Negativos
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                 )}
                             </div>
@@ -2899,7 +3196,7 @@ Prestación de Servicio.`;
                         )}
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
                     </div>
                 );
             }
@@ -2958,7 +3255,7 @@ Prestación de Servicio.`;
                         </div>
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
                     </div>
                 );
             }
@@ -3244,7 +3541,7 @@ Prestación de Servicio.`;
                         </div>
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
                     </div>
                 );
             }
@@ -3365,7 +3662,7 @@ Prestación de Servicio.`;
                             </div>
 
                             {/* Footer */}
-                            <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                            <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
                         </div>
                     );
                 }
@@ -3407,18 +3704,59 @@ Prestación de Servicio.`;
                                 <label className="block text-gray-700 font-semibold mb-2">
                                     Ingresar N° de CUIL
                                 </label>
-                                <input
-                                    type="tel"
-                                    inputMode="numeric"
-                                    value={cuil}
-                                    onChange={(e) => setCuil(formatearCUIL(e.target.value))}
-                                    placeholder="XX-XXXXXXXX-X"
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 text-lg"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="tel"
+                                        inputMode="numeric"
+                                        value={cuil}
+                                        onChange={(e) => setCuil(formatearCUIL(e.target.value))}
+                                        placeholder="XX-XXXXXXXX-X"
+                                        className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 text-lg"
+                                    />
+                                    <button
+                                        onClick={() => setMostrarCargaManual(!mostrarCargaManual)}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg transition-all flex items-center justify-center"
+                                        title="Carga manual por copiado y pegado"
+                                    >
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </button>
+                                </div>
                                 <p className="text-xs text-gray-600 mt-1">
                                     También puede consultar situación crediticia <a href="https://www.bcra.gob.ar/situacion-crediticia/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">aquí</a>.
                                 </p>
                             </div>
+
+                            {/* Área de carga manual */}
+                            {mostrarCargaManual && (
+                                <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                                    <label className="block text-gray-700 font-semibold mb-2">
+                                        📋 Carga Manual - Pegue el texto desde BCRA
+                                    </label>
+                                    <p className="text-xs text-gray-600 mb-2">
+                                        Copie y pegue las filas completas desde la web del BCRA (incluya nombre, banco, periodo, situación y monto)
+                                    </p>
+                                    <textarea
+                                        value={textoCargaManual}
+                                        onChange={(e) => setTextoCargaManual(e.target.value)}
+                                        placeholder="Pegue aquí el texto de la Central de Deudores del BCRA"
+                                        rows="4"
+                                        className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm font-mono"
+                                    />
+                                    <button
+                                        onClick={procesarCargaManual}
+                                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+                                    >
+                                        ✓ Procesar Texto
+                                    </button>
+                                    {errorCargaManual && (
+                                        <div className="mt-2 p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                                            <p className="text-red-700 text-sm">{errorCargaManual}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <button
                                 onClick={consultarBCRA}
@@ -3463,7 +3801,7 @@ Prestación de Servicio.`;
                                                                 entidad.situacion === 2 ? 'text-yellow-600' : 
                                                                 'text-red-600'
                                                             }`}>
-                                                                {entidad.situacion} - {obtenerNombreSituacion(entidad.situacion)}
+                                                                {entidad.situacion}
                                                             </span>
                                                         </div>
                                                         <div>
@@ -3475,7 +3813,7 @@ Prestación de Servicio.`;
                                                         <div>
                                                             <span className="text-gray-600">Monto:</span>
                                                             <span className="ml-2 font-bold">
-                                                                ${(entidad.monto * 1000).toLocaleString('es-AR')}
+                                                                ${entidad.monto.toLocaleString('es-AR')}
                                                             </span>
                                                         </div>
                                                         {entidad.diasAtrasoPago > 0 && (
@@ -3497,6 +3835,24 @@ Prestación de Servicio.`;
                                             </p>
                                         </div>
                                     )}
+                                    
+                                    {/* Mensaje de Informes Comerciales Negativos */}
+                                    {(() => {
+                                        const sumaSit345 = calcularSumaSituaciones345(resultadoBCRA);
+                                        const salarioMinimoActual = salarioMinimo || SALARIO_MINIMO_DEFAULT;
+                                        const limite5Salarios = salarioMinimoActual * 5;
+                                        
+                                        if (sumaSit345 > limite5Salarios) {
+                                            return (
+                                                <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-600 rounded">
+                                                    <p className="text-red-600 font-bold text-center">
+                                                        Informes Comerciales Negativos
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -4109,7 +4465,7 @@ Prestación de Servicio.`;
                             )}
 
                             {/* Footer */}
-                            <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                            <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
                         </div>
                     );
                 }
@@ -4159,18 +4515,59 @@ Prestación de Servicio.`;
                                 <label className="block text-gray-700 font-semibold mb-2">
                                     Ingresar N° de CUIL
                                 </label>
-                                <input
-                                    type="tel"
-                                    inputMode="numeric"
-                                    value={cuil}
-                                    onChange={(e) => setCuil(formatearCUIL(e.target.value))}
-                                    placeholder="XX-XXXXXXXX-X"
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 text-lg"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="tel"
+                                        inputMode="numeric"
+                                        value={cuil}
+                                        onChange={(e) => setCuil(formatearCUIL(e.target.value))}
+                                        placeholder="XX-XXXXXXXX-X"
+                                        className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 text-lg"
+                                    />
+                                    <button
+                                        onClick={() => setMostrarCargaManual(!mostrarCargaManual)}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg transition-all flex items-center justify-center"
+                                        title="Carga manual por copiado y pegado"
+                                    >
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </button>
+                                </div>
                                 <p className="text-xs text-gray-600 mt-1">
                                     También puede consultar situación crediticia <a href="https://www.bcra.gob.ar/situacion-crediticia/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">aquí</a>.
                                 </p>
                             </div>
+
+                            {/* Área de carga manual */}
+                            {mostrarCargaManual && (
+                                <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                                    <label className="block text-gray-700 font-semibold mb-2">
+                                        📋 Carga Manual - Pegue el texto desde BCRA
+                                    </label>
+                                    <p className="text-xs text-gray-600 mb-2">
+                                        Copie y pegue las filas completas desde la web del BCRA (incluya nombre, banco, periodo, situación y monto)
+                                    </p>
+                                    <textarea
+                                        value={textoCargaManual}
+                                        onChange={(e) => setTextoCargaManual(e.target.value)}
+                                        placeholder="Pegue aquí el texto de la Central de Deudores del BCRA"
+                                        rows="4"
+                                        className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm font-mono"
+                                    />
+                                    <button
+                                        onClick={procesarCargaManual}
+                                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+                                    >
+                                        ✓ Procesar Texto
+                                    </button>
+                                    {errorCargaManual && (
+                                        <div className="mt-2 p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                                            <p className="text-red-700 text-sm">{errorCargaManual}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <button
                                 onClick={consultarBCRA}
@@ -4215,7 +4612,7 @@ Prestación de Servicio.`;
                                                                 entidad.situacion === 2 ? 'text-yellow-600' : 
                                                                 'text-red-600'
                                                             }`}>
-                                                                {entidad.situacion} - {obtenerNombreSituacion(entidad.situacion)}
+                                                                {entidad.situacion}
                                                             </span>
                                                         </div>
                                                         <div>
@@ -4227,7 +4624,7 @@ Prestación de Servicio.`;
                                                         <div>
                                                             <span className="text-gray-600">Monto:</span>
                                                             <span className="ml-2 font-bold">
-                                                                ${(entidad.monto * 1000).toLocaleString('es-AR')}
+                                                                ${entidad.monto.toLocaleString('es-AR')}
                                                             </span>
                                                         </div>
                                                         {entidad.diasAtrasoPago > 0 && (
@@ -4249,6 +4646,24 @@ Prestación de Servicio.`;
                                             </p>
                                         </div>
                                     )}
+                                    
+                                    {/* Mensaje de Informes Comerciales Negativos */}
+                                    {(() => {
+                                        const sumaSit345 = calcularSumaSituaciones345(resultadoBCRA);
+                                        const salarioMinimoActual = salarioMinimo || SALARIO_MINIMO_DEFAULT;
+                                        const limite5Salarios = salarioMinimoActual * 5;
+                                        
+                                        if (sumaSit345 > limite5Salarios) {
+                                            return (
+                                                <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-600 rounded">
+                                                    <p className="text-red-600 font-bold text-center">
+                                                        Informes Comerciales Negativos
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -4344,16 +4759,34 @@ Prestación de Servicio.`;
                             <label className="block text-gray-700 text-lg font-semibold mb-3">
                                 📄 Indique Monto de Afectación
                             </label>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
-                                <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={canalPagoCajaPolicial === 'haberes' ? montoAfectacionHaberes : montoAfectacion}
-                                    onChange={handleMontoAfectacionChange}
-                                    placeholder="0,00"
-                                    className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-orange-300 rounded-lg focus:border-orange-500 focus:outline-none"
-                                />
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={canalPagoCajaPolicial === 'haberes' ? montoAfectacionHaberes : montoAfectacion}
+                                        onChange={handleMontoAfectacionChange}
+                                        placeholder="0,00"
+                                        className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-orange-300 rounded-lg focus:border-orange-500 focus:outline-none"
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => setMostrarCalculadora(true)}
+                                    className="bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold px-4 py-4 rounded-lg shadow-lg transition-all flex items-center justify-center"
+                                    title="Abrir calculadora"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="4" y="2" width="16" height="20" rx="2"/>
+                                        <line x1="8" y1="6" x2="16" y2="6"/>
+                                        <line x1="16" y1="14" x2="16" y2="14"/>
+                                        <line x1="8" y1="14" x2="8" y2="14"/>
+                                        <line x1="12" y1="14" x2="12" y2="14"/>
+                                        <line x1="16" y1="18" x2="16" y2="18"/>
+                                        <line x1="8" y1="18" x2="8" y2="18"/>
+                                        <line x1="12" y1="18" x2="12" y2="18"/>
+                                    </svg>
+                                </button>
                             </div>
                             {canalPagoCajaPolicial === 'haberes' && (() => {
                                 const totalCuotasCanceladas = calcularTotalCuotasAyudaHaberes();
@@ -4952,6 +5385,121 @@ Prestación de Servicio.`;
                         </div>
                         );
                     })()}
+
+                    {/* Modal Calculadora */}
+                    {mostrarCalculadora && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm">
+                                {/* Header */}
+                                <div className="bg-[#155E75] text-white p-4 rounded-t-lg flex justify-between items-center">
+                                    <h3 className="text-lg font-bold flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="4" y="2" width="16" height="20" rx="2"/>
+                                            <line x1="8" y1="6" x2="16" y2="6"/>
+                                            <line x1="16" y1="14" x2="16" y2="14"/>
+                                            <line x1="8" y1="14" x2="8" y2="14"/>
+                                            <line x1="12" y1="14" x2="12" y2="14"/>
+                                            <line x1="16" y1="18" x2="16" y2="18"/>
+                                            <line x1="8" y1="18" x2="8" y2="18"/>
+                                            <line x1="12" y1="18" x2="12" y2="18"/>
+                                        </svg>
+                                        Calculadora
+                                    </h3>
+                                    <button
+                                        onClick={() => {
+                                            setMostrarCalculadora(false);
+                                            setDisplayCalculadora('');
+                                            setOperacionCalculadora('');
+                                        }}
+                                        className="text-white hover:text-gray-200 font-bold text-2xl"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+
+                                {/* Display */}
+                                <div className="p-4 bg-gray-100">
+                                    <div className="text-lg text-gray-800 font-bold h-8 overflow-x-auto whitespace-nowrap mb-1">
+                                        {operacionCalculadora}
+                                    </div>
+                                    <div className="bg-white border-2 border-gray-300 rounded p-3 text-right text-3xl font-bold min-h-[60px] flex items-center justify-end">
+                                        {displayCalculadora || '0'}
+                                    </div>
+                                </div>
+
+                                {/* Teclado */}
+                                <div className="p-4 grid grid-cols-4 gap-2">
+                                    {/* Números */}
+                                    {['7', '8', '9'].map(num => (
+                                        <button
+                                            key={num}
+                                            onClick={() => agregarNumeroCalculadora(num)}
+                                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-lg text-xl transition-all"
+                                        >
+                                            {num}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => agregarOperadorCalculadora('+')}
+                                        className="bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-4 rounded-lg text-xl transition-all"
+                                    >
+                                        +
+                                    </button>
+
+                                    {['4', '5', '6'].map(num => (
+                                        <button
+                                            key={num}
+                                            onClick={() => agregarNumeroCalculadora(num)}
+                                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-lg text-xl transition-all"
+                                        >
+                                            {num}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => agregarOperadorCalculadora('-')}
+                                        className="bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-4 rounded-lg text-xl transition-all"
+                                    >
+                                        −
+                                    </button>
+
+                                    {['1', '2', '3'].map(num => (
+                                        <button
+                                            key={num}
+                                            onClick={() => agregarNumeroCalculadora(num)}
+                                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-lg text-xl transition-all"
+                                        >
+                                            {num}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={calcularResultadoCalculadora}
+                                        className="bg-[#047857] hover:bg-[#065f46] text-white font-bold py-4 rounded-lg text-xl transition-all row-span-2"
+                                    >
+                                        =
+                                    </button>
+
+                                    <button
+                                        onClick={limpiarCalculadora}
+                                        className="bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-4 rounded-lg text-sm transition-all"
+                                    >
+                                        C
+                                    </button>
+                                    <button
+                                        onClick={() => agregarNumeroCalculadora('0')}
+                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-lg text-xl transition-all"
+                                    >
+                                        0
+                                    </button>
+                                    <button
+                                        onClick={() => agregarNumeroCalculadora(',')}
+                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-lg text-xl transition-all"
+                                    >
+                                        ,
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Footer */}
                     <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
