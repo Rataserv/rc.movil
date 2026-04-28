@@ -155,23 +155,11 @@
             const [esSocioNuevoCaja, setEsSocioNuevoCaja] = useState(false);
             const [mesesDiferimientoCaja, setMesesDiferimientoCaja] = useState(0); // 0 o 3
             
-            // Estados para calculadora de depuración de haberes (Caja Policial - Caja)
+            // Estados para calculadora de depuración de haberes
             const [mostrarDepuracionHaberes, setMostrarDepuracionHaberes] = useState(false);
-            const [haberNetoSegunRecibo, setHaberNetoSegunRecibo] = useState('');
-            const [conceptosTemporales, setConceptosTemporales] = useState([
-                { id: 1, valor: '' },
-                { id: 2, valor: '' },
-                { id: 3, valor: '' },
-                { id: 4, valor: '' },
-                { id: 5, valor: '' }
-            ]);
-            const [descuentosTemporales, setDescuentosTemporales] = useState([
-                { id: 1, valor: '' },
-                { id: 2, valor: '' },
-                { id: 3, valor: '' },
-                { id: 4, valor: '' },
-                { id: 5, valor: '' }
-            ]);
+            const [mostrarDepuracionHaberesHaberes, setMostrarDepuracionHaberesHaberes] = useState(false);
+            const [mostrarDepuracionHaberesRetirado, setMostrarDepuracionHaberesRetirado] = useState(false);
+            const [mostrarDepuracionHaberesActividad, setMostrarDepuracionHaberesActividad] = useState(false);
             
             // Estados para cuotas de ayuda económica
             const [cuotasAyudaEconomica, setCuotasAyudaEconomica] = useState([
@@ -664,6 +652,335 @@
                 }
                 // Mostrar con coma como separador decimal
                 return valor.replace(/\./g, ',');
+            };
+            
+            // ============================================
+            // COMPONENTE UNIFICADO: ModalDepuradorUniversal
+            // ============================================
+            const ModalDepuradorUniversal = ({ isOpen, onClose, onConfirm, titulo }) => {
+                // Estados locales del modal
+                const [haberNetoRecibo, setHaberNetoRecibo] = useState('');
+                const [conceptos, setConceptos] = useState([
+                    { id: 1, valor: '' },
+                    { id: 2, valor: '' },
+                    { id: 3, valor: '' },
+                    { id: 4, valor: '' },
+                    { id: 5, valor: '' }
+                ]);
+                const [descuentos, setDescuentos] = useState([
+                    { id: 1, valor: '' },
+                    { id: 2, valor: '' },
+                    { id: 3, valor: '' },
+                    { id: 4, valor: '' },
+                    { id: 5, valor: '' }
+                ]);
+
+                // Función para formatear números con decimales
+                const formatearNumero = (valor) => {
+                    valor = valor.replace(/[^0-9.,]/g, '');
+                    valor = valor.replace(/,/g, '.');
+                    const partes = valor.split('.');
+                    if (partes.length > 2) {
+                        valor = partes[0] + '.' + partes.slice(1).join('');
+                    }
+                    if (partes.length === 2 && partes[1].length > 2) {
+                        valor = partes[0] + '.' + partes[1].substring(0, 2);
+                    }
+                    return valor.replace(/\./g, ',');
+                };
+
+                // Funciones para manejar conceptos
+                const agregarConcepto = () => {
+                    const nuevoId = conceptos.length > 0 
+                        ? Math.max(...conceptos.map(c => c.id)) + 1 
+                        : 1;
+                    setConceptos([...conceptos, { id: nuevoId, valor: '' }]);
+                };
+
+                const eliminarConcepto = (id) => {
+                    if (conceptos.length > 5) {
+                        setConceptos(conceptos.filter(c => c.id !== id));
+                    }
+                };
+
+                const actualizarConcepto = (id, valor) => {
+                    setConceptos(conceptos.map(c => 
+                        c.id === id ? { ...c, valor: valor } : c
+                    ));
+                };
+
+                // Funciones para manejar descuentos
+                const agregarDescuento = () => {
+                    const nuevoId = descuentos.length > 0 
+                        ? Math.max(...descuentos.map(d => d.id)) + 1 
+                        : 1;
+                    setDescuentos([...descuentos, { id: nuevoId, valor: '' }]);
+                };
+
+                const eliminarDescuento = (id) => {
+                    if (descuentos.length > 5) {
+                        setDescuentos(descuentos.filter(d => d.id !== id));
+                    }
+                };
+
+                const actualizarDescuento = (id, valor) => {
+                    setDescuentos(descuentos.map(d => 
+                        d.id === id ? { ...d, valor: valor } : d
+                    ));
+                };
+
+                // Calcular totales
+                const calcularTotalConceptos = () => {
+                    return conceptos.reduce((total, concepto) => {
+                        const valor = parseFloat(concepto.valor.replace(/,/g, '.')) || 0;
+                        return total + valor;
+                    }, 0);
+                };
+
+                const calcularTotalDescuentos = () => {
+                    return descuentos.reduce((total, descuento) => {
+                        const valor = parseFloat(descuento.valor.replace(/,/g, '.')) || 0;
+                        return total + valor;
+                    }, 0);
+                };
+
+                // Resetear campos
+                const resetear = () => {
+                    setHaberNetoRecibo('');
+                    setConceptos([
+                        { id: 1, valor: '' },
+                        { id: 2, valor: '' },
+                        { id: 3, valor: '' },
+                        { id: 4, valor: '' },
+                        { id: 5, valor: '' }
+                    ]);
+                    setDescuentos([
+                        { id: 1, valor: '' },
+                        { id: 2, valor: '' },
+                        { id: 3, valor: '' },
+                        { id: 4, valor: '' },
+                        { id: 5, valor: '' }
+                    ]);
+                };
+
+                // Manejar confirmación
+                const handleConfirmar = () => {
+                    const A = parseFloat(haberNetoRecibo.replace(/,/g, '.')) || 0;
+                    const B = calcularTotalConceptos();
+                    const C = calcularTotalDescuentos();
+                    const resultado = A - B + C;
+                    const valorFormateado = resultado.toFixed(2).replace('.', ',');
+                    onConfirm(valorFormateado);
+                    resetear();
+                    onClose();
+                };
+
+                if (!isOpen) return null;
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <div className="sticky top-0 bg-gradient-to-r from-slate-600 to-slate-700 text-white p-6 rounded-t-2xl z-10">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-2xl font-bold">🔍 Depurador de Haberes - {titulo}</h3>
+                                    <button
+                                        onClick={onClose}
+                                        className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-bold px-4 py-2 rounded-lg transition-all"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                <p className="text-sm mt-2 text-slate-100">
+                                    Calcula tu haber neto real considerando conceptos y descuentos temporales
+                                </p>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                                {/* Campo A: Haber Neto según Recibo */}
+                                <div>
+                                    <label className="block text-gray-700 font-semibold mb-2">
+                                        (A) Haber Neto según Recibo
+                                    </label>
+                                    <p className="text-xs text-gray-600 mb-3">
+                                        Ingresa el monto de "Haber Neto" que figura en tu recibo de sueldo
+                                    </p>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg">$</span>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={haberNetoRecibo}
+                                            onChange={(e) => setHaberNetoRecibo(formatearNumero(e.target.value))}
+                                            placeholder="0,00"
+                                            className="w-full pl-10 pr-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:border-slate-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Campo B: Conceptos Temporales */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-gray-700 font-semibold">
+                                            (B) Conceptos Temporales a Restar
+                                        </label>
+                                        <button
+                                            onClick={agregarConcepto}
+                                            className="bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center"
+                                            title="Agregar campo"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mb-3">
+                                        Retroactivos, bonificaciones especiales, embargos, etc.
+                                    </p>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                        {conceptos.map((concepto, index) => (
+                                            <div key={concepto.id} className="flex gap-2 items-center">
+                                                <span className="text-xs text-gray-600 font-semibold w-4">
+                                                    {index + 1}.
+                                                </span>
+                                                <div className="relative flex-1">
+                                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={concepto.valor}
+                                                        onChange={(e) => actualizarConcepto(concepto.id, formatearNumero(e.target.value))}
+                                                        placeholder="0,00"
+                                                        className="w-full pl-8 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-red-400 text-sm"
+                                                    />
+                                                </div>
+                                                {conceptos.length > 5 && (
+                                                    <button
+                                                        onClick={() => eliminarConcepto(concepto.id)}
+                                                        className="bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center flex-shrink-0"
+                                                        title="Eliminar campo"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-semibold text-red-700">Total a Restar:</span>
+                                            <span className="text-sm font-bold text-red-700">
+                                                ${calcularTotalConceptos().toFixed(2).replace('.', ',')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Campo C: Descuentos de Conceptos Temporales */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-gray-700 font-semibold">
+                                            (C) Descuentos sobre Conceptos Temporales a Sumar
+                                        </label>
+                                        <button
+                                            onClick={agregarDescuento}
+                                            className="bg-green-600 hover:bg-green-700 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center"
+                                            title="Agregar campo"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mb-3">
+                                        Aportes jubilatorios u obra social sobre retroactivos
+                                    </p>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                        {descuentos.map((descuento, index) => (
+                                            <div key={descuento.id} className="flex gap-2 items-center">
+                                                <span className="text-xs text-gray-600 font-semibold w-4">
+                                                    {index + 1}.
+                                                </span>
+                                                <div className="relative flex-1">
+                                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={descuento.valor}
+                                                        onChange={(e) => actualizarDescuento(descuento.id, formatearNumero(e.target.value))}
+                                                        placeholder="0,00"
+                                                        className="w-full pl-8 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-400 text-sm"
+                                                    />
+                                                </div>
+                                                {descuentos.length > 5 && (
+                                                    <button
+                                                        onClick={() => eliminarDescuento(descuento.id)}
+                                                        className="bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center flex-shrink-0"
+                                                        title="Eliminar campo"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-semibold text-green-700">Total a Sumar:</span>
+                                            <span className="text-sm font-bold text-green-700">
+                                                ${calcularTotalDescuentos().toFixed(2).replace('.', ',')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Resultado */}
+                                {haberNetoRecibo && (
+                                    <div className="mt-6 p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg border-2 border-slate-300">
+                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Fórmula:</h4>
+                                        <div className="text-xs text-gray-600 space-y-1 mb-4">
+                                            <div className="flex justify-between">
+                                                <span>(A) Haber según Recibo:</span>
+                                                <span className="font-semibold">
+                                                    ${haberNetoRecibo || '0,00'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between text-red-600">
+                                                <span>(B) Conceptos Temporales:</span>
+                                                <span className="font-semibold">
+                                                    -${calcularTotalConceptos().toFixed(2).replace('.', ',')}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between text-green-600">
+                                                <span>(C) Descuentos Temporales:</span>
+                                                <span className="font-semibold">
+                                                    +${calcularTotalDescuentos().toFixed(2).replace('.', ',')}
+                                                </span>
+                                            </div>
+                                            <div className="border-t-2 border-slate-300 my-2"></div>
+                                            <div className="flex justify-between text-lg font-bold text-slate-700">
+                                                <span>Haber Neto Final:</span>
+                                                <span className="text-slate-800">
+                                                    ${(() => {
+                                                        const A = parseFloat(haberNetoRecibo.replace(/,/g, '.')) || 0;
+                                                        const B = calcularTotalConceptos();
+                                                        const C = calcularTotalDescuentos();
+                                                        const resultado = A - B + C;
+                                                        return resultado.toFixed(2).replace('.', ',');
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Botón Aplicar */}
+                                <button
+                                    onClick={handleConfirmar}
+                                    disabled={!haberNetoRecibo}
+                                    className="w-full bg-slate-600 hover:bg-slate-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
+                                >
+                                    ✓ Confirmar y Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
             };
             
             // Función para manejar cambio de haber neto
@@ -2656,16 +2973,31 @@ Prestación de Servicio.`;
                                 <label className="block text-gray-700 text-lg font-semibold mb-3">
                                     💵 Ingrese su Haber Neto
                                 </label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={haberNeto}
-                                        onChange={handleHaberNetoChange}
-                                        placeholder="0"
-                                        className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-orange-300 rounded-lg focus:border-orange-500 focus:outline-none"
-                                    />
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={haberNeto}
+                                            onChange={handleHaberNetoChange}
+                                            placeholder="0"
+                                            className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-orange-300 rounded-lg focus:border-orange-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => setMostrarDepuracionHaberesRetirado(true)}
+                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-4 rounded-lg shadow-md transition-all flex items-center justify-center border-2 border-slate-300"
+                                        title="Calculadora de Depuración de Haberes"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="4" y="2" width="16" height="20" rx="2"/>
+                                            <line x1="8" y1="6" x2="16" y2="6"/>
+                                            <line x1="8" y1="10" x2="16" y2="10"/>
+                                            <line x1="8" y1="14" x2="16" y2="14"/>
+                                            <line x1="8" y1="18" x2="16" y2="18"/>
+                                        </svg>
+                                    </button>
                                 </div>
                             </div>
 
@@ -3052,7 +3384,7 @@ Prestación de Servicio.`;
                                         onClick={calcularAyudaRetirado}
                                         className="w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-4 px-6 rounded-lg text-xl shadow-lg transition-all transform hover:scale-105"
                                     >
-                                        🧮 Calcular
+                                        Calcular
                                     </button>
                                     
                                     {/* Salario Mínimo Vital y Móvil */}
@@ -3221,11 +3553,19 @@ Prestación de Servicio.`;
                                         }}
                                         className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                     >
-                                        🔄 Reiniciar cálculo
+                                        Reiniciar cálculo
                                     </button>
                                 </div>
                             </div>
                         )}
+
+                        <ModalDepuradorUniversal 
+                            isOpen={mostrarDepuracionHaberesRetirado}
+                            onClose={() => setMostrarDepuracionHaberesRetirado(false)}
+                            onConfirm={(valor) => setHaberNeto(valor)}
+                            titulo="Retirados IAF"
+                        />
+
 
                         {/* Footer */}
                         <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
@@ -3451,7 +3791,7 @@ Prestación de Servicio.`;
                                     onClick={calcularDisponibleCertificado}
                                     className="w-full bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold py-4 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                 >
-                                    CALCULAR
+                                    Calcular
                                 </button>
                             </div>
 
@@ -4018,7 +4358,7 @@ Prestación de Servicio.`;
                                             onClick={() => setPantalla('calculadorCajaPolicial')}
                                             className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold py-3 px-6 rounded-lg text-base shadow-lg transition-all transform hover:scale-105"
                                         >
-                                            📊 Calcular Monto de Afectación
+                                            Calcular Monto de Afectación
                                         </button>
                                     </div>
                                 </div>
@@ -4665,7 +5005,7 @@ Prestación de Servicio.`;
                                             onClick={calcularAyudaCaja}
                                             className="w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-4 px-6 rounded-lg text-xl shadow-lg transition-all transform hover:scale-105"
                                         >
-                                            🧮 Calcular
+                                            Calcular
                                         </button>
                                         
                                         {/* Salario Mínimo Vital y Móvil */}
@@ -4836,321 +5176,18 @@ Prestación de Servicio.`;
                                             }}
                                             className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                         >
-                                            🔄 Reiniciar cálculo
+                                            Reiniciar cálculo
                                         </button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Modal Calculadora de Depuración de Haberes */}
-                            {mostrarDepuracionHaberes && (() => {
-                                // Funciones para manejar conceptos temporales
-                                const agregarConceptoTemporal = () => {
-                                    const nuevoId = conceptosTemporales.length > 0 
-                                        ? Math.max(...conceptosTemporales.map(c => c.id)) + 1 
-                                        : 1;
-                                    setConceptosTemporales([...conceptosTemporales, { id: nuevoId, valor: '' }]);
-                                };
-
-                                const eliminarConceptoTemporal = (id) => {
-                                    if (conceptosTemporales.length > 5) {
-                                        setConceptosTemporales(conceptosTemporales.filter(c => c.id !== id));
-                                    }
-                                };
-
-                                const actualizarConceptoTemporal = (id, valor) => {
-                                    setConceptosTemporales(conceptosTemporales.map(c => 
-                                        c.id === id ? { ...c, valor: valor } : c
-                                    ));
-                                };
-
-                                // Funciones para manejar descuentos temporales
-                                const agregarDescuentoTemporal = () => {
-                                    const nuevoId = descuentosTemporales.length > 0 
-                                        ? Math.max(...descuentosTemporales.map(d => d.id)) + 1 
-                                        : 1;
-                                    setDescuentosTemporales([...descuentosTemporales, { id: nuevoId, valor: '' }]);
-                                };
-
-                                const eliminarDescuentoTemporal = (id) => {
-                                    if (descuentosTemporales.length > 5) {
-                                        setDescuentosTemporales(descuentosTemporales.filter(d => d.id !== id));
-                                    }
-                                };
-
-                                const actualizarDescuentoTemporal = (id, valor) => {
-                                    setDescuentosTemporales(descuentosTemporales.map(d => 
-                                        d.id === id ? { ...d, valor: valor } : d
-                                    ));
-                                };
-
-                                // Función para formatear números con decimales
-                                const formatearNumeroDecimal = (valor) => {
-                                    valor = valor.replace(/[^0-9.,]/g, '');
-                                    valor = valor.replace(/,/g, '.');
-                                    const partes = valor.split('.');
-                                    if (partes.length > 2) {
-                                        valor = partes[0] + '.' + partes.slice(1).join('');
-                                    }
-                                    if (partes.length === 2 && partes[1].length > 2) {
-                                        valor = partes[0] + '.' + partes[1].substring(0, 2);
-                                    }
-                                    return valor.replace(/\./g, ',');
-                                };
-
-                                // Calcular totales
-                                const calcularTotalConceptos = () => {
-                                    return conceptosTemporales.reduce((total, concepto) => {
-                                        const valor = parseFloat(concepto.valor.replace(/,/g, '.')) || 0;
-                                        return total + valor;
-                                    }, 0);
-                                };
-
-                                const calcularTotalDescuentos = () => {
-                                    return descuentosTemporales.reduce((total, descuento) => {
-                                        const valor = parseFloat(descuento.valor.replace(/,/g, '.')) || 0;
-                                        return total + valor;
-                                    }, 0);
-                                };
-
-                                const resetearDepuracion = () => {
-                                    setHaberNetoSegunRecibo('');
-                                    setConceptosTemporales([
-                                        { id: 1, valor: '' },
-                                        { id: 2, valor: '' },
-                                        { id: 3, valor: '' },
-                                        { id: 4, valor: '' },
-                                        { id: 5, valor: '' }
-                                    ]);
-                                    setDescuentosTemporales([
-                                        { id: 1, valor: '' },
-                                        { id: 2, valor: '' },
-                                        { id: 3, valor: '' },
-                                        { id: 4, valor: '' },
-                                        { id: 5, valor: '' }
-                                    ]);
-                                };
-
-                                return (
-                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-                                            {/* Header */}
-                                            <div className="bg-slate-600 text-white p-4 rounded-t-lg flex justify-between items-center sticky top-0 z-10">
-                                                <h3 className="text-lg font-bold">
-                                                    Depuración de Haberes
-                                                </h3>
-                                                <button
-                                                    onClick={() => {
-                                                        setMostrarDepuracionHaberes(false);
-                                                        resetearDepuracion();
-                                                    }}
-                                                    className="text-white hover:text-gray-200 font-bold text-2xl"
-                                                >
-                                                    ×
-                                                </button>
-                                            </div>
-
-                                            {/* Contenido */}
-                                            <div className="p-6 space-y-4">
-                                                <p className="text-sm text-gray-600 mb-4">
-                                                    Esta herramienta permite calcular el <strong>Haber Neto Real</strong> eliminando distorsiones temporales del recibo.
-                                                </p>
-
-                                                {/* Campo A: Haber Neto según Recibo */}
-                                                <div>
-                                                    <label className="block text-gray-700 font-semibold mb-2">
-                                                        (A) Haber Neto según Recibo
-                                                    </label>
-                                                    <p className="text-xs text-gray-600 mb-2">
-                                                        El valor total que figura en el bolsillo
-                                                    </p>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                                                        <input
-                                                            type="text"
-                                                            inputMode="decimal"
-                                                            value={haberNetoSegunRecibo}
-                                                            onChange={(e) => setHaberNetoSegunRecibo(formatearNumeroDecimal(e.target.value))}
-                                                            placeholder="0,00"
-                                                            className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-slate-500"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Campo B: Conceptos Temporales */}
-                                                <div>
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <label className="block text-gray-700 font-semibold">
-                                                            (B) Conceptos Temporales a Restar
-                                                        </label>
-                                                        <button
-                                                            onClick={agregarConceptoTemporal}
-                                                            className="bg-green-600 hover:bg-green-700 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center"
-                                                            title="Agregar campo"
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600 mb-3">
-                                                        Retroactivos, aguinaldo, bonos por única vez
-                                                    </p>
-                                                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                        {conceptosTemporales.map((concepto, index) => (
-                                                            <div key={concepto.id} className="flex gap-2 items-center">
-                                                                <span className="text-xs text-gray-600 font-semibold w-4">
-                                                                    {index + 1}.
-                                                                </span>
-                                                                <div className="relative flex-1">
-                                                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
-                                                                    <input
-                                                                        type="text"
-                                                                        inputMode="decimal"
-                                                                        value={concepto.valor}
-                                                                        onChange={(e) => actualizarConceptoTemporal(concepto.id, formatearNumeroDecimal(e.target.value))}
-                                                                        placeholder="0,00"
-                                                                        className="w-full pl-8 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-red-400 text-sm"
-                                                                    />
-                                                                </div>
-                                                                {conceptosTemporales.length > 5 && (
-                                                                    <button
-                                                                        onClick={() => eliminarConceptoTemporal(concepto.id)}
-                                                                        className="bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center flex-shrink-0"
-                                                                        title="Eliminar campo"
-                                                                    >
-                                                                        ✕
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-xs font-semibold text-red-700">Total a Restar:</span>
-                                                            <span className="text-sm font-bold text-red-700">
-                                                                ${calcularTotalConceptos().toFixed(2).replace('.', ',')}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Campo C: Descuentos de Conceptos Temporales */}
-                                                <div>
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <label className="block text-gray-700 font-semibold">
-                                                            (C) Descuentos sobre Conceptos Temporales a Sumar
-                                                        </label>
-                                                        <button
-                                                            onClick={agregarDescuentoTemporal}
-                                                            className="bg-green-600 hover:bg-green-700 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center"
-                                                            title="Agregar campo"
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600 mb-3">
-                                                        Aportes jubilatorios u obra social sobre retroactivos
-                                                    </p>
-                                                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                        {descuentosTemporales.map((descuento, index) => (
-                                                            <div key={descuento.id} className="flex gap-2 items-center">
-                                                                <span className="text-xs text-gray-600 font-semibold w-4">
-                                                                    {index + 1}.
-                                                                </span>
-                                                                <div className="relative flex-1">
-                                                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
-                                                                    <input
-                                                                        type="text"
-                                                                        inputMode="decimal"
-                                                                        value={descuento.valor}
-                                                                        onChange={(e) => actualizarDescuentoTemporal(descuento.id, formatearNumeroDecimal(e.target.value))}
-                                                                        placeholder="0,00"
-                                                                        className="w-full pl-8 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-400 text-sm"
-                                                                    />
-                                                                </div>
-                                                                {descuentosTemporales.length > 5 && (
-                                                                    <button
-                                                                        onClick={() => eliminarDescuentoTemporal(descuento.id)}
-                                                                        className="bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center flex-shrink-0"
-                                                                        title="Eliminar campo"
-                                                                    >
-                                                                        ✕
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-xs font-semibold text-green-700">Total a Sumar:</span>
-                                                            <span className="text-sm font-bold text-green-700">
-                                                                ${calcularTotalDescuentos().toFixed(2).replace('.', ',')}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Resultado */}
-                                                {haberNetoSegunRecibo && (
-                                                    <div className="mt-6 p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg border-2 border-slate-300">
-                                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Fórmula:</h4>
-                                                        <div className="text-xs text-gray-600 space-y-1 mb-4">
-                                                            <div className="flex justify-between">
-                                                                <span>(A) Haber según Recibo:</span>
-                                                                <span className="font-semibold">
-                                                                    ${haberNetoSegunRecibo || '0,00'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex justify-between text-red-600">
-                                                                <span>(B) Conceptos Temporales:</span>
-                                                                <span className="font-semibold">
-                                                                    -${calcularTotalConceptos().toFixed(2).replace('.', ',')}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex justify-between text-green-600">
-                                                                <span>(C) Descuentos Temporales:</span>
-                                                                <span className="font-semibold">
-                                                                    +${calcularTotalDescuentos().toFixed(2).replace('.', ',')}
-                                                                </span>
-                                                            </div>
-                                                            <div className="border-t-2 border-slate-300 my-2"></div>
-                                                            <div className="flex justify-between text-lg font-bold text-slate-700">
-                                                                <span>Haber Neto Final:</span>
-                                                                <span className="text-slate-800">
-                                                                    ${(() => {
-                                                                        const A = parseFloat(haberNetoSegunRecibo.replace(/,/g, '.')) || 0;
-                                                                        const B = calcularTotalConceptos();
-                                                                        const C = calcularTotalDescuentos();
-                                                                        const resultado = A - B + C;
-                                                                        return resultado.toFixed(2).replace('.', ',');
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Botón Aplicar */}
-                                                <button
-                                                    onClick={() => {
-                                                        const A = parseFloat(haberNetoSegunRecibo.replace(/,/g, '.')) || 0;
-                                                        const B = calcularTotalConceptos();
-                                                        const C = calcularTotalDescuentos();
-                                                        const resultado = A - B + C;
-                                                        const valorFormateado = resultado.toFixed(2).replace('.', ',');
-                                                        setHaberNetoCaja(valorFormateado);
-                                                        setMostrarDepuracionHaberes(false);
-                                                        resetearDepuracion();
-                                                    }}
-                                                    disabled={!haberNetoSegunRecibo}
-                                                    className="w-full bg-slate-600 hover:bg-slate-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
-                                                >
-                                                    ✓ Confirmar y Aplicar
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
+                            <ModalDepuradorUniversal 
+                                isOpen={mostrarDepuracionHaberes}
+                                onClose={() => setMostrarDepuracionHaberes(false)}
+                                onConfirm={(valor) => setHaberNetoCaja(valor)}
+                                titulo="Caja Policial - Caja"
+                            />
 
                             {/* Footer */}
                             <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
@@ -5365,33 +5402,48 @@ Prestación de Servicio.`;
                                 <label className="block text-gray-700 text-lg font-semibold mb-3">
                                     💰 Ingrese su Haber Neto
                                 </label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={haberNetoHaberes}
-                                        onChange={(e) => {
-                                            let valor = e.target.value;
-                                            // Permitir números, punto y coma
-                                            valor = valor.replace(/[^0-9.,]/g, '');
-                                            // Reemplazar coma por punto para procesamiento interno
-                                            valor = valor.replace(/,/g, '.');
-                                            // Permitir solo un punto decimal
-                                            const partes = valor.split('.');
-                                            if (partes.length > 2) {
-                                                valor = partes[0] + '.' + partes.slice(1).join('');
-                                            }
-                                            // Limitar a 2 decimales
-                                            if (partes.length === 2 && partes[1].length > 2) {
-                                                valor = partes[0] + '.' + partes[1].substring(0, 2);
-                                            }
-                                            // Mostrar con coma como separador decimal
-                                            setHaberNetoHaberes(valor.replace(/\./g, ','));
-                                        }}
-                                        placeholder="0"
-                                        className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                    />
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={haberNetoHaberes}
+                                            onChange={(e) => {
+                                                let valor = e.target.value;
+                                                // Permitir números, punto y coma
+                                                valor = valor.replace(/[^0-9.,]/g, '');
+                                                // Reemplazar coma por punto para procesamiento interno
+                                                valor = valor.replace(/,/g, '.');
+                                                // Permitir solo un punto decimal
+                                                const partes = valor.split('.');
+                                                if (partes.length > 2) {
+                                                    valor = partes[0] + '.' + partes.slice(1).join('');
+                                                }
+                                                // Limitar a 2 decimales
+                                                if (partes.length === 2 && partes[1].length > 2) {
+                                                    valor = partes[0] + '.' + partes[1].substring(0, 2);
+                                                }
+                                                // Mostrar con coma como separador decimal
+                                                setHaberNetoHaberes(valor.replace(/\./g, ','));
+                                            }}
+                                            placeholder="0"
+                                            className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => setMostrarDepuracionHaberesHaberes(true)}
+                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-4 rounded-lg shadow-md transition-all flex items-center justify-center border-2 border-slate-300"
+                                        title="Calculadora de Depuración de Haberes"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="4" y="2" width="16" height="20" rx="2"/>
+                                            <line x1="8" y1="6" x2="16" y2="6"/>
+                                            <line x1="8" y1="10" x2="16" y2="10"/>
+                                            <line x1="8" y1="14" x2="16" y2="14"/>
+                                            <line x1="8" y1="18" x2="16" y2="18"/>
+                                        </svg>
+                                    </button>
                                 </div>
                                 {haberNetoHaberes && (
                                     <p className="text-sm text-blue-600 mt-2 font-semibold">
@@ -5407,33 +5459,48 @@ Prestación de Servicio.`;
                                 <label className="block text-gray-700 text-lg font-semibold mb-3">
                                     💰 Ingrese su Haber Neto
                                 </label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={haberNetoActividad}
-                                        onChange={(e) => {
-                                            let valor = e.target.value;
-                                            // Permitir números, punto y coma
-                                            valor = valor.replace(/[^0-9.,]/g, '');
-                                            // Reemplazar coma por punto para procesamiento interno
-                                            valor = valor.replace(/,/g, '.');
-                                            // Permitir solo un punto decimal
-                                            const partes = valor.split('.');
-                                            if (partes.length > 2) {
-                                                valor = partes[0] + '.' + partes.slice(1).join('');
-                                            }
-                                            // Limitar a 2 decimales
-                                            if (partes.length === 2 && partes[1].length > 2) {
-                                                valor = partes[0] + '.' + partes[1].substring(0, 2);
-                                            }
-                                            // Mostrar con coma como separador decimal
-                                            setHaberNetoActividad(valor.replace(/\./g, ','));
-                                        }}
-                                        placeholder="0"
-                                        className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                    />
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl">$</span>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={haberNetoActividad}
+                                            onChange={(e) => {
+                                                let valor = e.target.value;
+                                                // Permitir números, punto y coma
+                                                valor = valor.replace(/[^0-9.,]/g, '');
+                                                // Reemplazar coma por punto para procesamiento interno
+                                                valor = valor.replace(/,/g, '.');
+                                                // Permitir solo un punto decimal
+                                                const partes = valor.split('.');
+                                                if (partes.length > 2) {
+                                                    valor = partes[0] + '.' + partes.slice(1).join('');
+                                                }
+                                                // Limitar a 2 decimales
+                                                if (partes.length === 2 && partes[1].length > 2) {
+                                                    valor = partes[0] + '.' + partes[1].substring(0, 2);
+                                                }
+                                                // Mostrar con coma como separador decimal
+                                                setHaberNetoActividad(valor.replace(/\./g, ','));
+                                            }}
+                                            placeholder="0"
+                                            className="w-full pl-10 pr-4 py-4 text-2xl border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => setMostrarDepuracionHaberesActividad(true)}
+                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-4 rounded-lg shadow-md transition-all flex items-center justify-center border-2 border-slate-300"
+                                        title="Calculadora de Depuración de Haberes"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="4" y="2" width="16" height="20" rx="2"/>
+                                            <line x1="8" y1="6" x2="16" y2="6"/>
+                                            <line x1="8" y1="10" x2="16" y2="10"/>
+                                            <line x1="8" y1="14" x2="16" y2="14"/>
+                                            <line x1="8" y1="18" x2="16" y2="18"/>
+                                        </svg>
+                                    </button>
                                 </div>
                                 {haberNetoActividad && (
                                     <p className="text-sm text-blue-600 mt-2 font-semibold">
@@ -5923,7 +5990,7 @@ Prestación de Servicio.`;
                             onClick={calcularAyuda}
                             className="w-full bg-[#155E75] hover:bg-[#0d3d4d] text-white font-bold py-4 px-6 rounded-lg text-xl shadow-lg transition-all transform hover:scale-105"
                         >
-                            🧮 Calcular
+                            Calcular
                         </button>
                         
                         {/* Salario Mínimo Vital y Móvil */}
@@ -6075,7 +6142,7 @@ Prestación de Servicio.`;
                                     onClick={resetearDatos}
                                     className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                 >
-                                    🔄 Reiniciar cálculo
+                                    Reiniciar cálculo
                                 </button>
                             </div>
                         </div>
@@ -6206,6 +6273,22 @@ Prestación de Servicio.`;
                             </div>
                         </div>
                     )}
+
+                    <ModalDepuradorUniversal 
+                            isOpen={mostrarDepuracionHaberesHaberes}
+                            onClose={() => setMostrarDepuracionHaberesHaberes(false)}
+                            onConfirm={(valor) => setHaberNetoHaberes(valor)}
+                            titulo="Caja Policial - Haberes"
+                        />
+
+
+                    <ModalDepuradorUniversal 
+                            isOpen={mostrarDepuracionHaberesActividad}
+                            onClose={() => setMostrarDepuracionHaberesActividad(false)}
+                            onConfirm={(valor) => setHaberNetoActividad(valor)}
+                            titulo="En Actividad"
+                        />
+
 
                     {/* Footer */}
                     <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
