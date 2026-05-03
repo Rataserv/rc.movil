@@ -18,10 +18,104 @@
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23155E75'/><text x='50' y='65' font-size='40' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='700'>SM</text></svg>">
-    
-    <script defer crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script defer crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+    <!-- ================================================
+         CRITICAL CSS: Loading Screen (renderiza antes de cualquier script)
+         ================================================ -->
+    <style>
+        /* Animaciones críticas para pantalla de carga */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.7; }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.5s ease-out; }
+
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100vh;
+            background: linear-gradient(135deg, #EFF6FF 0%, #FFF7ED 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.35s ease-out;
+        }
+        #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+
+        #loading-spinner {
+            width: 50px; height: 50px;
+            border: 4px solid #E5E7EB;
+            border-top-color: #155E75;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        #loading-logo {
+            width: 120px; height: auto;
+            margin-bottom: 30px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        #loading-text {
+            margin-top: 20px;
+            color: #155E75;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        /* Toast de actualización SW */
+        #sw-update-toast {
+            position: fixed;
+            bottom: 20px; left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #1e293b;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 99999;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            white-space: nowrap;
+        }
+        #sw-update-toast.show { transform: translateX(-50%) translateY(0); }
+        #sw-update-btn {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #sw-update-btn:hover { background: #7dd3fc; }
+
+        /* Tabla responsive */
+        table { border-collapse: collapse; font-size: 0.875rem; }
+        @media (max-width: 640px) {
+            table { font-size: 0.75rem; }
+            th, td { padding: 0.5rem 0.25rem !important; }
+        }
+        .sticky { position: sticky; }
+    </style>
+
+    <!-- Scripts: Tailwind sin defer (necesita correr antes del render para clases),
+         React/ReactDOM/Babel con defer (no bloquean el parse del HTML) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -29,56 +123,34 @@
                 extend: {
                     fontFamily: {
                         sans: [
-                            '-apple-system',
-                            'BlinkMacSystemFont',
-                            'San Francisco',
-                            'Segoe UI',
-                            'Roboto',
-                            'Helvetica Neue',
-                            'Arial',
-                            'sans-serif'
+                            '-apple-system', 'BlinkMacSystemFont', 'San Francisco',
+                            'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'
                         ]
                     }
                 }
             }
         }
     </script>
+    <script defer crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script defer crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-orange-50 min-h-screen">
-    <!-- Pantalla de carga inicial -->
-    <div id="loading-screen" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100vh;
-        background: linear-gradient(135deg, #EFF6FF 0%, #FFF7ED 100%);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
-    ">
+    <!-- Pantalla de carga inicial — estilos definidos en el <head> para Critical Path -->
+    <div id="loading-screen">
         <img 
+            id="loading-logo"
             src="https://www.smsv.com.ar/scr/views/smsv/dist/images/logo.svg" 
-            alt="SMSV Logo" 
-            style="width: 120px; height: auto; margin-bottom: 30px; animation: pulse 2s ease-in-out infinite;"
+            alt="SMSV Logo"
         />
-        <div style="
-            width: 50px;
-            height: 50px;
-            border: 4px solid #E5E7EB;
-            border-top-color: #155E75;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        "></div>
-        <p style="
-            margin-top: 20px;
-            color: #155E75;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        ">Cargando...</p>
+        <div id="loading-spinner"></div>
+        <p id="loading-text">Cargando...</p>
+    </div>
+
+    <!-- Toast de actualización del Service Worker -->
+    <div id="sw-update-toast">
+        <span>🔄 Nueva versión disponible.</span>
+        <button id="sw-update-btn" onclick="swUpdateNow()">Actualizar ahora</button>
     </div>
 
     <div id="root"></div>
@@ -88,7 +160,7 @@
         
         // *** CONFIGURACIÓN: FECHA DE CORTE ***
         // Modificar esta fecha cuando cambie el mes
-        const FECHA_CORTE = "20 de abril de 2026";
+        const FECHA_CORTE = "19 de mayo de 2026";
         // *** FIN CONFIGURACIÓN ***
 
         function App() {
@@ -243,6 +315,10 @@
             const [nuevaCategoria, setNuevaCategoria] = useState('');
             const [editandoIndice, setEditandoIndice] = useState(null);
             const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
+            const [calculosGuardados, setCalculosGuardados] = useState(() => {
+                const guardados = localStorage.getItem('calculosGuardados');
+                return guardados ? JSON.parse(guardados) : [];
+            });
 
             // ============================================================
             // CONFIGURACIÓN DE PARÁMETROS - ACTUALIZAR AQUÍ MANUALMENTE
@@ -258,7 +334,7 @@
             const CUOTA_SOCIAL_DEFAULT = 20470;
             
             // SALARIO MÍNIMO VITAL Y MÓVIL - Valor vigente ($)
-            const SALARIO_MINIMO_DEFAULT = 352400;
+            const SALARIO_MINIMO_DEFAULT = 357800;
             
             // ============================================================
             // FIN CONFIGURACIÓN
@@ -291,6 +367,18 @@
                     setSalarioMinimo(SALARIO_MINIMO_DEFAULT);
                 }
             }, []);
+
+            // Ocultar la pantalla de carga cuando el componente esté montado y listo
+            useEffect(() => {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (!loadingScreen) return;
+                // Vinculamos la desaparición al render real de React, no a un timeout arbitrario
+                loadingScreen.classList.add('fade-out');
+                const timer = setTimeout(() => {
+                    loadingScreen.style.display = 'none';
+                }, 380); // igual que la duración de la transición CSS
+                return () => clearTimeout(timer);
+            }, []); // [] = solo se ejecuta una vez, cuando el componente está montado
 
             // Buscar cuota social y monto máximo al cargar la app - DESHABILITADO
             // La actualización de parámetros ahora es manual modificando el HTML
@@ -655,6 +743,95 @@
             };
             
             // ============================================
+            // CONTROL DE TECLADO PARA CALCULADORA (solo en PC)
+            // ============================================
+            React.useEffect(() => {
+                // Detectar si el dispositivo es una computadora (no táctil)
+                const esDispositivoPC = () => {
+                    // Verificar si tiene puntero fino (mouse) y no es táctil
+                    const tienePointerFino = window.matchMedia("(pointer: fine)").matches;
+                    // Verificar tamaño de pantalla (desktop generalmente > 1024px)
+                    const pantallaPc = window.innerWidth > 1024;
+                    // Verificar si no es dispositivo táctil
+                    const noEsTactil = !('ontouchstart' in window || navigator.maxTouchPoints > 0);
+                    
+                    return tienePointerFino && pantallaPc && noEsTactil;
+                };
+                
+                // Solo agregar el listener si es PC
+                if (!esDispositivoPC()) {
+                    return; // No hacer nada en dispositivos móviles
+                }
+                
+                const handleKeyDown = (e) => {
+                    // Solo funcionar si la calculadora está visible
+                    if (!mostrarCalculadora) return;
+                    
+                    // No interceptar teclas si el usuario está escribiendo en otro input
+                    const elementoActivo = document.activeElement;
+                    if (elementoActivo && (
+                        elementoActivo.tagName === 'INPUT' || 
+                        elementoActivo.tagName === 'TEXTAREA' ||
+                        elementoActivo.contentEditable === 'true'
+                    )) {
+                        // Si el foco está en un input que NO es de la calculadora, no hacer nada
+                        if (!elementoActivo.closest('.calculadora-container')) {
+                            return;
+                        }
+                    }
+                    
+                    // Mapeo de teclas
+                    const tecla = e.key;
+                    
+                    // Números 0-9
+                    if (/^[0-9]$/.test(tecla)) {
+                        e.preventDefault();
+                        agregarNumeroCalculadora(tecla);
+                    }
+                    // Punto o coma para decimal
+                    else if (tecla === '.' || tecla === ',') {
+                        e.preventDefault();
+                        // Solo agregar si no hay ya un punto/coma en el display actual
+                        if (!displayCalculadora.includes(',') && !displayCalculadora.includes('.')) {
+                            agregarNumeroCalculadora(',');
+                        }
+                    }
+                    // Operadores + y -
+                    else if (tecla === '+') {
+                        e.preventDefault();
+                        agregarOperadorCalculadora('+');
+                    }
+                    else if (tecla === '-') {
+                        e.preventDefault();
+                        agregarOperadorCalculadora('-');
+                    }
+                    // Enter para calcular (igual)
+                    else if (tecla === 'Enter') {
+                        e.preventDefault();
+                        calcularResultadoCalculadora();
+                    }
+                    // Backspace para borrar último carácter
+                    else if (tecla === 'Backspace') {
+                        e.preventDefault();
+                        borrarUltimoCalculadora();
+                    }
+                    // C o Escape para limpiar
+                    else if (tecla === 'c' || tecla === 'C' || tecla === 'Escape') {
+                        e.preventDefault();
+                        limpiarCalculadora();
+                    }
+                };
+                
+                // Agregar el event listener
+                window.addEventListener('keydown', handleKeyDown);
+                
+                // Cleanup: remover el event listener cuando el componente se desmonte
+                return () => {
+                    window.removeEventListener('keydown', handleKeyDown);
+                };
+            }, [mostrarCalculadora, displayCalculadora, operacionCalculadora]); // Dependencias necesarias
+            
+            // ============================================
             // COMPONENTE UNIFICADO: ModalDepuradorUniversal
             // ============================================
             const ModalDepuradorUniversal = ({ isOpen, onClose, onConfirm, titulo }) => {
@@ -674,6 +851,10 @@
                     { id: 4, valor: '' },
                     { id: 5, valor: '' }
                 ]);
+
+                // Referencias para los inputs (para el foco automático)
+                const conceptosRefs = React.useRef({});
+                const descuentosRefs = React.useRef({});
 
                 // Función para formatear números con decimales
                 const formatearNumero = (valor) => {
@@ -729,6 +910,75 @@
                     ));
                 };
 
+                // Funciones para el modo de teclado rápido (Enter)
+                const handleEnterConcepto = (e, conceptoId, index) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        
+                        // Obtener el valor actual del concepto
+                        const conceptoActual = conceptos.find(c => c.id === conceptoId);
+                        
+                        // Solo proceder si el campo actual no está vacío
+                        if (conceptoActual && conceptoActual.valor.trim() !== '') {
+                            // Verificar si ya existe una fila vacía después de la actual
+                            const siguienteIndex = index + 1;
+                            
+                            if (siguienteIndex < conceptos.length) {
+                                // Ya existe una fila siguiente, mover el foco a ella
+                                const siguienteConcepto = conceptos[siguienteIndex];
+                                setTimeout(() => {
+                                    const inputRef = conceptosRefs.current[siguienteConcepto.id];
+                                    if (inputRef) inputRef.focus();
+                                }, 50);
+                            } else {
+                                // Es la última fila, agregar una nueva
+                                const nuevoId = Math.max(...conceptos.map(c => c.id)) + 1;
+                                setConceptos([...conceptos, { id: nuevoId, valor: '' }]);
+                                
+                                // Hacer foco en el nuevo input después de que se renderice
+                                setTimeout(() => {
+                                    const inputRef = conceptosRefs.current[nuevoId];
+                                    if (inputRef) inputRef.focus();
+                                }, 50);
+                            }
+                        }
+                    }
+                };
+
+                const handleEnterDescuento = (e, descuentoId, index) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        
+                        // Obtener el valor actual del descuento
+                        const descuentoActual = descuentos.find(d => d.id === descuentoId);
+                        
+                        // Solo proceder si el campo actual no está vacío
+                        if (descuentoActual && descuentoActual.valor.trim() !== '') {
+                            // Verificar si ya existe una fila vacía después de la actual
+                            const siguienteIndex = index + 1;
+                            
+                            if (siguienteIndex < descuentos.length) {
+                                // Ya existe una fila siguiente, mover el foco a ella
+                                const siguienteDescuento = descuentos[siguienteIndex];
+                                setTimeout(() => {
+                                    const inputRef = descuentosRefs.current[siguienteDescuento.id];
+                                    if (inputRef) inputRef.focus();
+                                }, 50);
+                            } else {
+                                // Es la última fila, agregar una nueva
+                                const nuevoId = Math.max(...descuentos.map(d => d.id)) + 1;
+                                setDescuentos([...descuentos, { id: nuevoId, valor: '' }]);
+                                
+                                // Hacer foco en el nuevo input después de que se renderice
+                                setTimeout(() => {
+                                    const inputRef = descuentosRefs.current[nuevoId];
+                                    if (inputRef) inputRef.focus();
+                                }, 50);
+                            }
+                        }
+                    }
+                };
+
                 // Calcular totales
                 const calcularTotalConceptos = () => {
                     return conceptos.reduce((total, concepto) => {
@@ -782,17 +1032,14 @@
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                             <div className="sticky top-0 bg-gradient-to-r from-slate-600 to-slate-700 text-white p-6 rounded-t-2xl z-10">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="text-2xl font-bold">🔍 Depurador de Haberes - {titulo}</h3>
+                                    <h3 className="text-lg font-bold">Depurador de Haberes</h3>
                                     <button
                                         onClick={onClose}
-                                        className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-bold px-4 py-2 rounded-lg transition-all"
+                                        className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-bold px-2 py-1 rounded-lg transition-all text-sm"
                                     >
                                         ✕
                                     </button>
                                 </div>
-                                <p className="text-sm mt-2 text-slate-100">
-                                    Calcula tu haber neto real considerando conceptos y descuentos temporales
-                                </p>
                             </div>
 
                             <div className="p-6 space-y-6">
@@ -801,9 +1048,6 @@
                                     <label className="block text-gray-700 font-semibold mb-2">
                                         (A) Haber Neto según Recibo
                                     </label>
-                                    <p className="text-xs text-gray-600 mb-3">
-                                        Ingresa el monto de "Haber Neto" que figura en tu recibo de sueldo
-                                    </p>
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg">$</span>
                                         <input
@@ -825,7 +1069,7 @@
                                         </label>
                                         <button
                                             onClick={agregarConcepto}
-                                            className="bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center"
+                                            className="bg-green-600 hover:bg-green-700 text-white font-bold px-2 py-2 rounded-lg transition-all w-8 h-8 flex items-center justify-center"
                                             title="Agregar campo"
                                         >
                                             +
@@ -843,10 +1087,12 @@
                                                 <div className="relative flex-1">
                                                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
                                                     <input
+                                                        ref={(el) => conceptosRefs.current[concepto.id] = el}
                                                         type="text"
                                                         inputMode="decimal"
                                                         value={concepto.valor}
                                                         onChange={(e) => actualizarConcepto(concepto.id, formatearNumero(e.target.value))}
+                                                        onKeyDown={(e) => handleEnterConcepto(e, concepto.id, index)}
                                                         placeholder="0,00"
                                                         className="w-full pl-8 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-red-400 text-sm"
                                                     />
@@ -899,10 +1145,12 @@
                                                 <div className="relative flex-1">
                                                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
                                                     <input
+                                                        ref={(el) => descuentosRefs.current[descuento.id] = el}
                                                         type="text"
                                                         inputMode="decimal"
                                                         value={descuento.valor}
                                                         onChange={(e) => actualizarDescuento(descuento.id, formatearNumero(e.target.value))}
+                                                        onKeyDown={(e) => handleEnterDescuento(e, descuento.id, index)}
                                                         placeholder="0,00"
                                                         className="w-full pl-8 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-400 text-sm"
                                                     />
@@ -2163,6 +2411,8 @@
             const resetearDatos = () => {
                 setMonto('');
                 setMontoHaberes('');
+                setHaberNetoActividad('');
+                setHaberNetoHaberes('');
                 setCuotas('24');
                 setCuotasHaberes('72');
                 setMontoAfectacion('');
@@ -2178,6 +2428,9 @@
                 setModificarCuotaSocial(false);
                 setCuotaSocialPersonalizada('20470');
                 setCuotaSocialEditadaManualmente(false);
+                
+                // Scroll al inicio de la página
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const compartirPorWhatsApp = () => {
@@ -2246,6 +2499,119 @@
                 
                 // Abrir WhatsApp en nueva ventana
                 window.open(urlWhatsApp, '_blank');
+            };
+
+            // ============================================================
+            // FUNCIONES DE GUARDADO DE CÁLCULOS
+            // ============================================================
+            const guardarCalculo = (tipoPantalla) => {
+                const etiqueta = window.prompt('Ingresá un nombre para este cálculo (ej: "Socio Juan Pérez"):');
+                if (!etiqueta || !etiqueta.trim()) return;
+
+                let datos = {};
+                if (tipoPantalla === 'retirado') {
+                    datos = {
+                        haberNeto, esPoderdante, esSocioNuevoRetirado: esSocioNuevo,
+                        montoAyudaEconomica, cuotas, mesesDiferimientoRetirado,
+                        modificarCuotaSocial, cuotaSocialPersonalizada,
+                        fechaPagoRetirado, resultadoRetirado,
+                        cuotasAyudaEconomica
+                    };
+                } else if (tipoPantalla === 'cajaPolicial') {
+                    datos = {
+                        haberNetoCaja, esPoderdanteCaja, esSocioNuevoCaja,
+                        montoAyudaEconomicaCaja, cuotas, mesesDiferimientoCaja,
+                        modificarCuotaSocial, cuotaSocialPersonalizada,
+                        fechaPagoCaja, resultadoCaja,
+                        cuotasAyudaEconomicaCaja
+                    };
+                } else if (tipoPantalla === 'actividad') {
+                    datos = {
+                        monto, montoHaberes, haberNetoActividad, haberNetoHaberes,
+                        cuotas, cuotasHaberes, montoAfectacion, montoAfectacionHaberes,
+                        esSocioNuevo, esSocioNuevoHaberes, esPoderdanteHaberes,
+                        mesesDiferimientoActividad, mesesDiferimientoHaberes,
+                        modificarCuotaSocial, cuotaSocialPersonalizada,
+                        fechaPagoActividad, fechaPagoHaberes,
+                        canalPagoCajaPolicial, resultado, resultadoHaberes,
+                        cuotasAyudaEconomicaEnActividad, cuotasAyudaEconomicaHaberes
+                    };
+                }
+
+                const nuevoCalculo = {
+                    id: Date.now(),
+                    etiqueta: etiqueta.trim(),
+                    fecha: new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    tipo: tipoPantalla,
+                    datos
+                };
+
+                const nuevaLista = [nuevoCalculo, ...calculosGuardados];
+                setCalculosGuardados(nuevaLista);
+                localStorage.setItem('calculosGuardados', JSON.stringify(nuevaLista));
+                window.alert(`✅ Cálculo "${etiqueta.trim()}" guardado correctamente.`);
+            };
+
+            const cargarCalculo = (calculo) => {
+                const { tipo, datos } = calculo;
+                if (tipo === 'retirado') {
+                    if (datos.haberNeto !== undefined) setHaberNeto(datos.haberNeto);
+                    if (datos.esPoderdante !== undefined) setEsPoderdante(datos.esPoderdante);
+                    if (datos.esSocioNuevoRetirado !== undefined) setEsSocioNuevo(datos.esSocioNuevoRetirado);
+                    if (datos.montoAyudaEconomica !== undefined) setMontoAyudaEconomica(datos.montoAyudaEconomica);
+                    if (datos.cuotas !== undefined) setCuotas(datos.cuotas);
+                    if (datos.mesesDiferimientoRetirado !== undefined) setMesesDiferimientoRetirado(datos.mesesDiferimientoRetirado);
+                    if (datos.modificarCuotaSocial !== undefined) setModificarCuotaSocial(datos.modificarCuotaSocial);
+                    if (datos.cuotaSocialPersonalizada !== undefined) setCuotaSocialPersonalizada(datos.cuotaSocialPersonalizada);
+                    if (datos.fechaPagoRetirado !== undefined) setFechaPagoRetirado(datos.fechaPagoRetirado);
+                    if (datos.resultadoRetirado !== undefined) setResultadoRetirado(datos.resultadoRetirado);
+                    if (datos.cuotasAyudaEconomica !== undefined) setCuotasAyudaEconomica(datos.cuotasAyudaEconomica);
+                    setPantalla('retirado');
+                } else if (tipo === 'cajaPolicial') {
+                    if (datos.haberNetoCaja !== undefined) setHaberNetoCaja(datos.haberNetoCaja);
+                    if (datos.esPoderdanteCaja !== undefined) setEsPoderdanteCaja(datos.esPoderdanteCaja);
+                    if (datos.esSocioNuevoCaja !== undefined) setEsSocioNuevoCaja(datos.esSocioNuevoCaja);
+                    if (datos.montoAyudaEconomicaCaja !== undefined) setMontoAyudaEconomicaCaja(datos.montoAyudaEconomicaCaja);
+                    if (datos.cuotas !== undefined) setCuotas(datos.cuotas);
+                    if (datos.mesesDiferimientoCaja !== undefined) setMesesDiferimientoCaja(datos.mesesDiferimientoCaja);
+                    if (datos.modificarCuotaSocial !== undefined) setModificarCuotaSocial(datos.modificarCuotaSocial);
+                    if (datos.cuotaSocialPersonalizada !== undefined) setCuotaSocialPersonalizada(datos.cuotaSocialPersonalizada);
+                    if (datos.fechaPagoCaja !== undefined) setFechaPagoCaja(datos.fechaPagoCaja);
+                    if (datos.resultadoCaja !== undefined) setResultadoCaja(datos.resultadoCaja);
+                    if (datos.cuotasAyudaEconomicaCaja !== undefined) setCuotasAyudaEconomicaCaja(datos.cuotasAyudaEconomicaCaja);
+                    setPantalla('cajaPolicial');
+                } else if (tipo === 'actividad') {
+                    if (datos.monto !== undefined) setMonto(datos.monto);
+                    if (datos.montoHaberes !== undefined) setMontoHaberes(datos.montoHaberes);
+                    if (datos.haberNetoActividad !== undefined) setHaberNetoActividad(datos.haberNetoActividad);
+                    if (datos.haberNetoHaberes !== undefined) setHaberNetoHaberes(datos.haberNetoHaberes);
+                    if (datos.cuotas !== undefined) setCuotas(datos.cuotas);
+                    if (datos.cuotasHaberes !== undefined) setCuotasHaberes(datos.cuotasHaberes);
+                    if (datos.montoAfectacion !== undefined) setMontoAfectacion(datos.montoAfectacion);
+                    if (datos.montoAfectacionHaberes !== undefined) setMontoAfectacionHaberes(datos.montoAfectacionHaberes);
+                    if (datos.esSocioNuevo !== undefined) setEsSocioNuevo(datos.esSocioNuevo);
+                    if (datos.esSocioNuevoHaberes !== undefined) setEsSocioNuevoHaberes(datos.esSocioNuevoHaberes);
+                    if (datos.esPoderdanteHaberes !== undefined) setEsPoderdanteHaberes(datos.esPoderdanteHaberes);
+                    if (datos.mesesDiferimientoActividad !== undefined) setMesesDiferimientoActividad(datos.mesesDiferimientoActividad);
+                    if (datos.mesesDiferimientoHaberes !== undefined) setMesesDiferimientoHaberes(datos.mesesDiferimientoHaberes);
+                    if (datos.modificarCuotaSocial !== undefined) setModificarCuotaSocial(datos.modificarCuotaSocial);
+                    if (datos.cuotaSocialPersonalizada !== undefined) setCuotaSocialPersonalizada(datos.cuotaSocialPersonalizada);
+                    if (datos.fechaPagoActividad !== undefined) setFechaPagoActividad(datos.fechaPagoActividad);
+                    if (datos.fechaPagoHaberes !== undefined) setFechaPagoHaberes(datos.fechaPagoHaberes);
+                    if (datos.canalPagoCajaPolicial !== undefined) setCanalPagoCajaPolicial(datos.canalPagoCajaPolicial);
+                    if (datos.resultado !== undefined) setResultado(datos.resultado);
+                    if (datos.resultadoHaberes !== undefined) setResultadoHaberes(datos.resultadoHaberes);
+                    if (datos.cuotasAyudaEconomicaEnActividad !== undefined) setCuotasAyudaEconomicaEnActividad(datos.cuotasAyudaEconomicaEnActividad);
+                    if (datos.cuotasAyudaEconomicaHaberes !== undefined) setCuotasAyudaEconomicaHaberes(datos.cuotasAyudaEconomicaHaberes);
+                    setPantalla('cajaPolicial');
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
+            const eliminarCalculo = (id) => {
+                const nuevaLista = calculosGuardados.filter(c => c.id !== id);
+                setCalculosGuardados(nuevaLista);
+                localStorage.setItem('calculosGuardados', JSON.stringify(nuevaLista));
             };
 
             const formatearNumero = (valor) => {
@@ -2561,7 +2927,8 @@
             // Pantalla de menú inicial
             if (pantalla === 'menu') {
                 return (
-                    <div className="container mx-auto px-4 py-4 max-w-2xl">
+                    <div className="flex flex-col min-h-screen">
+                    <div className="container mx-auto px-4 py-4 max-w-2xl flex-1">
                         {/* Logo SMSV - Solo en pantalla principal */}
                         <div className="mb-6 text-center">
                             <img 
@@ -2572,12 +2939,9 @@
                         </div>
 
                         {/* Título de la App */}
-                        <h1 className="text-xl font-bold text-[#155E75] text-center mb-1">
+                        <h1 className="text-xl font-bold text-[#155E75] text-center mb-3">
                             RC Móvil
                         </h1>
-                        <p className="text-xs text-gray-600 text-center mb-3">
-                            Closed BETA
-                        </p>
 
                         {/* Título */}
                         <h2 className="text-lg font-bold text-gray-800 text-center mb-3">
@@ -2658,6 +3022,16 @@ Prestación de Servicio.`;
                                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
                                 </svg>
                                 Mensajes Predefinidos
+                            </button>
+
+                            <button
+                                onClick={() => setPantalla('listaCalculos')}
+                                className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg text-base shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M20 6h-2.18c.07-.43.18-.86.18-1.3C18 2.55 15.45 0 12.3 0c-1.71 0-3.24.78-4.3 2H5C3.34 2 2 3.34 2 5v14c0 1.66 1.34 3 3 3h14c1.66 0 3-1.34 3-3V9c0-1.66-1.34-3-3-3zm-8-4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/>
+                                </svg>
+                                📂 Cargar Cálculo Guardado
                             </button>
                         </div>
                         {/* Tabla de Ayudas Económicas */}
@@ -2772,7 +3146,10 @@ Prestación de Servicio.`;
                         )}
 
                         {/* Footer */}
-                        <div className="text-center mt-8"><p className="text-xs text-gray-400">by afr1249</p></div>
+                    </div>
+                    <div className="text-center py-3">
+                        <p className="text-xs text-gray-400">by afr1249</p>
+                    </div>
                     </div>
                 );
             }
@@ -3407,6 +3784,9 @@ Prestación de Servicio.`;
                                         >
                                             {modificarSalarioMinimo ? '✖ Cancelar edición' : '✏️ Editar manualmente'}
                                         </button>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            📅 Fecha de corte: {FECHA_CORTE}
+                                        </p>
                                         
                                         {modificarSalarioMinimo && (
                                             <div className="mt-3 bg-blue-50 p-3 rounded-lg">
@@ -3533,6 +3913,12 @@ Prestación de Servicio.`;
                                 {/* Botón Reiniciar cálculo */}
                                 <div className="mb-6">
                                     <button
+                                        onClick={() => guardarCalculo('retirado')}
+                                        className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 mb-3"
+                                    >
+                                        💾 Guardar Cálculo
+                                    </button>
+                                    <button
                                         onClick={() => {
                                             setHaberNeto('');
                                             setEsPoderdante(false);
@@ -3550,6 +3936,9 @@ Prestación de Servicio.`;
                                                 { id: 2, monto: '', saldoAyuda: '', seCancela: false },
                                                 { id: 3, monto: '', saldoAyuda: '', seCancela: false }
                                             ]);
+                                            
+                                            // Scroll al inicio de la página
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }}
                                         className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                     >
@@ -3953,6 +4342,106 @@ Prestación de Servicio.`;
 
                         {/* Footer */}
                         <div className="text-center mt-8"><p className="text-xs text-gray-400">by Filial Libertad</p></div>
+                    </div>
+                );
+            }
+
+
+            // Pantalla de Lista de Cálculos Guardados
+            if (pantalla === 'listaCalculos') {
+                const etiquetaTipo = (tipo) => {
+                    if (tipo === 'retirado') return { label: 'IAF Retirado', color: 'bg-blue-100 text-blue-800' };
+                    if (tipo === 'cajaPolicial') return { label: 'Caja Policial', color: 'bg-purple-100 text-purple-800' };
+                    if (tipo === 'actividad') return { label: 'En Actividad', color: 'bg-green-100 text-green-800' };
+                    return { label: tipo, color: 'bg-gray-100 text-gray-700' };
+                };
+                return (
+                    <div className="container mx-auto px-4 py-8 max-w-2xl">
+                        <button
+                            onClick={() => setPantalla('menu')}
+                            className="mb-6 flex items-center gap-2 text-slate-700 hover:text-slate-900 font-semibold transition-colors"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                            Volver al menú
+                        </button>
+
+                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                            <h2 className="text-2xl font-bold text-slate-800 mb-1 flex items-center gap-2">
+                                📂 Cálculos Guardados
+                            </h2>
+                            <p className="text-sm text-gray-500 mb-6">Tocá un cálculo para volver a cargarlo en la app.</p>
+
+                            {calculosGuardados.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400">
+                                    <svg className="w-16 h-16 mx-auto mb-4 opacity-30" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20 6h-2.18c.07-.43.18-.86.18-1.3C18 2.55 15.45 0 12.3 0c-1.71 0-3.24.78-4.3 2H5C3.34 2 2 3.34 2 5v14c0 1.66 1.34 3 3 3h14c1.66 0 3-1.34 3-3V9c0-1.66-1.34-3-3-3z"/>
+                                    </svg>
+                                    <p className="text-lg font-medium">No hay cálculos guardados</p>
+                                    <p className="text-sm mt-1">Guardá un cálculo desde cualquier pantalla de resultado.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {calculosGuardados.map((calculo) => {
+                                        const { label, color } = etiquetaTipo(calculo.tipo);
+                                        return (
+                                            <div
+                                                key={calculo.id}
+                                                className="flex items-center gap-3 p-4 bg-gray-50 hover:bg-slate-50 border border-gray-200 hover:border-slate-300 rounded-xl shadow-sm transition-all"
+                                            >
+                                                <button
+                                                    onClick={() => cargarCalculo(calculo)}
+                                                    className="flex-1 text-left"
+                                                >
+                                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                        <span className="font-semibold text-slate-800 text-base">{calculo.etiqueta}</span>
+                                                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${color}`}>{label}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm4.24 16L12 15.45 7.77 18l1.12-4.81-3.73-3.23 4.92-.42L12 5l1.92 4.53 4.92.42-3.73 3.23L16.23 18z"/>
+                                                        </svg>
+                                                        {calculo.fecha}
+                                                    </div>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        if (window.confirm(`¿Eliminar el cálculo "${calculo.etiqueta}"?`)) {
+                                                            eliminarCalculo(calculo.id);
+                                                        }
+                                                    }}
+                                                    className="flex-shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                    title="Eliminar cálculo"
+                                                >
+                                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {calculosGuardados.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    if (window.confirm('¿Eliminar TODOS los cálculos guardados? Esta acción no se puede deshacer.')) {
+                                        setCalculosGuardados([]);
+                                        localStorage.removeItem('calculosGuardados');
+                                    }
+                                }}
+                                className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-2.5 px-4 rounded-xl border border-red-200 transition-all text-sm flex items-center justify-center gap-2"
+                            >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                                Eliminar todos los cálculos
+                            </button>
+                        )}
                     </div>
                 );
             }
@@ -5028,6 +5517,9 @@ Prestación de Servicio.`;
                                             >
                                                 {modificarSalarioMinimo ? '✖ Cancelar edición' : '✏️ Editar manualmente'}
                                             </button>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                📅 Fecha de corte: {FECHA_CORTE}
+                                            </p>
                                             
                                             {modificarSalarioMinimo && (
                                                 <div className="mt-3 bg-blue-50 p-3 rounded-lg">
@@ -5161,6 +5653,12 @@ Prestación de Servicio.`;
                                     {/* Botón Reiniciar cálculo */}
                                     <div className="mb-6">
                                         <button
+                                            onClick={() => guardarCalculo('cajaPolicial')}
+                                            className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 mb-3"
+                                        >
+                                            💾 Guardar Cálculo
+                                        </button>
+                                        <button
                                             onClick={() => {
                                                 setHaberNetoCaja('');
                                                 setEsPoderdanteCaja(false);
@@ -5173,6 +5671,9 @@ Prestación de Servicio.`;
                                                 setModificarCuotaSocial(false);
                                                 setCuotaSocialPersonalizada('20470');
                                                 setCuotaSocialEditadaManualmente(false);
+                                                
+                                                // Scroll al inicio de la página
+                                                window.scrollTo({ top: 0, behavior: 'smooth' });
                                             }}
                                             className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                         >
@@ -6013,6 +6514,9 @@ Prestación de Servicio.`;
                             >
                                 {modificarSalarioMinimo ? '✖ Cancelar edición' : '✏️ Editar manualmente'}
                             </button>
+                            <p className="text-xs text-gray-400 mt-1">
+                                📅 Fecha de corte: {FECHA_CORTE}
+                            </p>
                             
                             {modificarSalarioMinimo && (
                                 <div className="mt-3 bg-blue-50 p-3 rounded-lg">
@@ -6139,6 +6643,12 @@ Prestación de Servicio.`;
                             {/* Botón Reiniciar cálculo */}
                             <div className="mb-6">
                                 <button
+                                    onClick={() => guardarCalculo('actividad')}
+                                    className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 mb-3"
+                                >
+                                    💾 Guardar Cálculo
+                                </button>
+                                <button
                                     onClick={resetearDatos}
                                     className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 px-6 rounded-lg text-lg shadow-lg transition-all transform hover:scale-105"
                                 >
@@ -6152,7 +6662,7 @@ Prestación de Servicio.`;
                     {/* Modal Calculadora */}
                     {mostrarCalculadora && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm">
+                            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm calculadora-container">
                                 {/* Header */}
                                 <div className="bg-[#155E75] text-white p-4 rounded-t-lg flex justify-between items-center">
                                     <h3 className="text-lg font-bold flex items-center gap-2">
@@ -6298,74 +6808,65 @@ Prestación de Servicio.`;
 
         ReactDOM.render(<App />, document.getElementById('root'));
         
-        // Ocultar pantalla de carga cuando React esté listo
-        setTimeout(() => {
-            const loadingScreen = document.getElementById('loading-screen');
-            if (loadingScreen) {
-                loadingScreen.style.opacity = '0';
-                loadingScreen.style.transition = 'opacity 0.3s ease-out';
-                setTimeout(() => {
-                    loadingScreen.style.display = 'none';
-                }, 300);
+    </script>
+
+    <!-- ================================================
+         SERVICE WORKER: Registro y lógica de actualización
+         ================================================ -->
+    <script>
+        // Variable para guardar referencia al SW en espera
+        let swWaitingWorker = null;
+
+        function swUpdateNow() {
+            if (swWaitingWorker) {
+                // Decirle al SW en espera que tome el control
+                swWaitingWorker.postMessage({ type: 'SKIP_WAITING' });
             }
-        }, 100);
+            // Limpiar caché y recargar para mostrar la nueva versión
+            if ('caches' in window) {
+                caches.keys().then(keys => {
+                    keys.forEach(key => caches.delete(key));
+                }).finally(() => window.location.reload());
+            } else {
+                window.location.reload();
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        // Detectar nuevo SW instalándose
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (!newWorker) return;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // Hay una versión nueva esperando: mostrar toast
+                                    swWaitingWorker = newWorker;
+                                    const toast = document.getElementById('sw-update-toast');
+                                    if (toast) toast.classList.add('show');
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => console.warn('[SW] Registro fallido:', err));
+
+                // Recargar automáticamente cuando el nuevo SW tome el control
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        refreshing = true;
+                        window.location.reload();
+                    }
+                });
+            });
+        }
     </script>
 
     <style>
-        /* Animaciones para pantalla de carga */
-        @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.7;
-            }
-        }
-
-        @keyframes fade-in {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .animate-fade-in {
-            animation: fade-in 0.5s ease-out;
-        }
-
-        /* Estilos para tabla responsive */
-        table {
-            border-collapse: collapse;
-            font-size: 0.875rem;
-        }
-
-        @media (max-width: 640px) {
-            table {
-                font-size: 0.75rem;
-            }
-            
-            th, td {
-                padding: 0.5rem 0.25rem !important;
-            }
-        }
-
         /* Sticky column para scroll horizontal */
-        .sticky {
-            position: sticky;
-        }
+        .sticky { position: sticky; }
     </style>
 </body>
 </html>
