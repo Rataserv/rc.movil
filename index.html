@@ -164,7 +164,7 @@
         
         // *** CONFIGURACIÓN: FECHA DE CORTE ***
         // Modificar esta fecha cuando cambie el mes
-        const FECHA_CORTE = "20 de abril de 2026";
+        const FECHA_CORTE = "19 de junio de 2026";
         // *** FIN CONFIGURACIÓN ***
 
         function App() {
@@ -343,7 +343,7 @@
             const CUOTA_SOCIAL_DEFAULT = 22570;
             
             // SALARIO MÍNIMO VITAL Y MÓVIL - Valor vigente ($)
-            const SALARIO_MINIMO_DEFAULT = 36300;
+            const SALARIO_MINIMO_DEFAULT = 363000;
             
             // ============================================================
             // FIN CONFIGURACIÓN
@@ -1374,7 +1374,7 @@
              */
             const calcularInteresesDiferidos = (montoSolicitado, tna, mesesDiferimiento = 0, fechaOtorgamiento = new Date()) => {
                 // La Fecha de Corte es el día 20 de cada mes
-                const DIA_CORTE = 19;
+                const DIA_CORTE = 20;
                 
                 // Obtener el día del mes de la fecha de otorgamiento
                 const diaOtorgamiento = fechaOtorgamiento.getDate();
