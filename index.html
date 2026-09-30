@@ -1,6 +1,20 @@
 <!DOCTYPE html>
+<!--
+  ============================================================
+  >>>  FECHA DE CORTE - EDITAR SOLO LA LINEA DE ABAJO  <<<
+  ============================================================
+-->
 <html lang="es">
 <head>
+    <script>
+        // ============================================================
+        //  CONFIGURACION MENSUAL: FECHA DE CORTE
+        //  Cambiar unicamente el texto entre comillas.
+        //  Ejemplo: "20 de octubre de 2026"
+        // ============================================================
+        window.FECHA_CORTE_CONFIG = "20 de octubre de 2026";
+        // ============================================================
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calculadora de Ayudas Económicas - SMSV</title>
@@ -162,10 +176,8 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
         
-        // *** CONFIGURACIÓN: FECHA DE CORTE ***
-        // Modificar esta fecha cuando cambie el mes
-        const FECHA_CORTE = "18 de septiembre de 2026";
-        // *** FIN CONFIGURACIÓN ***
+        // La fecha de corte se edita al comienzo del archivo (línea 15, al principio)
+        const FECHA_CORTE = window.FECHA_CORTE_CONFIG;
 
         function App() {
             // Estado para controlar la pantalla actual
@@ -340,7 +352,7 @@
             const MONTO_MAXIMO_ABSOLUTO = 30000000;
             
             // CUOTA SOCIAL - Valor vigente ($)
-            const CUOTA_SOCIAL_DEFAULT = 24000;
+            const CUOTA_SOCIAL_DEFAULT = 24070;
             
             // SALARIO MÍNIMO VITAL Y MÓVIL - Valor vigente ($)
             const SALARIO_MINIMO_DEFAULT = 376800;
